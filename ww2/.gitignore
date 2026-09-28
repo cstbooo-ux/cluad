@@ -1,0 +1,4 @@
+fonts/
+data/ne_*
+build/
+__pycache__/
