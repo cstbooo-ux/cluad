@@ -169,8 +169,8 @@ def wildflowers(ctx, y, x0, x1, c, seed, n=20, t=0.0):
 # ---------------------------------------------------------------- richer skies
 CLOUD_TONES = {
     # shadow, body, lit, highlight
-    "gold": ("#c8ab8c", "#ebdcc2", "#f8eedc", "#fffaf0"),
-    "red": ("#4e1216", "#8a2c2a", "#c65a40", "#f09a66"),
+    "gold": ("#a89e98", "#dcd0c0", "#f7ebd6", "#fffbf0"),
+    "red": ("#34161f", "#6e2d30", "#c46246", "#ffb46e"),
     "dusk": ("#6a3a3a", "#a86a5a", "#dca080", "#f6d0a8"),
 }
 
@@ -180,7 +180,14 @@ def tones_mix(a, b, t):
 
 
 def cumulus_rich(ctx, x, y, w, tones, seed, a=1.0, light=(0.55, -0.85), tower=0.6, t=0.0):
-    """Cel-shaded cumulus: one puffy mass (optional tower) with a flat base. The whole mass is lit as a unit:
+    """Realistic cumulus from the pre-rendered sprite library (silhouette_kit/clouds.py): flat base on y, w wide,
+    coloured with tones = (shadow, body, lit, highlight). The sun is on the right; light[0] < 0 mirrors it."""
+    from . import clouds
+    clouds.draw(ctx, x, y, w * 1.1, tones, clouds.pick(seed, tower), a, flip=light[0] < 0)
+
+
+def cumulus_cel(ctx, x, y, w, tones, seed, a=1.0, light=(0.55, -0.85), tower=0.6, t=0.0):
+    """Cel-shaded cumulus (the old flat look): one puffy mass (optional tower) with a flat base. The whole mass is lit as a unit:
     a lit crescent on the side facing `light`, a thin hot rim inside it, and a shadowed underside.
     tones = (shadow, body, lit, highlight)."""
     rnd = random.Random(seed)
