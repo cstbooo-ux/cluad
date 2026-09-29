@@ -270,3 +270,17 @@ def figure(ctx, x, gy, h, phase, kind="civ", run=0.0, c="#000000", charge=False,
         ctx.fill()
     ctx.restore()
     return (hip[0], gy - ground)
+
+
+def stride(u, run=0.0, charge=False):
+    """Ground distance (px) covered per unit of phase, so the background can scroll without foot sliding."""
+    A = 0.34 + 0.28 * run
+    lean = 0.04 + 0.2 * run + (0.08 if charge else 0)
+    L1, L2 = 0.25 * u, 0.245 * u
+
+    def ankle_x(p):
+        ph = TAU * p + math.pi / 2
+        thigh = A * math.sin(ph) + lean * 0.35
+        flex = 0.07 + (0.8 + 0.9 * run) * max(0.0, math.cos(ph - 0.5)) ** 2
+        return L1 * math.sin(thigh) + L2 * math.sin(thigh - flex)
+    return 2 * (ankle_x(0.0) - ankle_x(0.5))

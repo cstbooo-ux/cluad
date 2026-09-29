@@ -286,14 +286,23 @@ from figure import figure  # noqa: E402
 
 
 # ---------------------------------------------------------------- post
+_GRAIN = {}
+
+
+def _grain(k):
+    """A small pool of fixed grain fields, cycled a few frames apart (film-like, and cheap to encode)."""
+    if k not in _GRAIN:
+        rng = np.random.default_rng(1000 + k)
+        n = rng.normal(0, 7.0, (H // 2, W // 2)).astype(np.float32)
+        _GRAIN[k] = np.repeat(np.repeat(n, 2, 0), 2, 1)[:, :, None]
+    return _GRAIN[k]
+
+
 def post(surface, seed=0, grain=7.0, vignette=0.32, warm=None):
     buf = surface.get_data()
     a = np.ndarray((H, W, 4), np.uint8, buf).copy()
     img = a[:, :, [2, 1, 0]].astype(np.float32)
-    rng = np.random.default_rng(seed)
-    n = rng.normal(0, grain, (H // 2, W // 2)).astype(np.float32)
-    n = np.repeat(np.repeat(n, 2, 0), 2, 1)
-    img += n[:, :, None]
+    img += _grain(seed // 3 % 6) * (grain / 7.0)
     yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
     d = ((xx - W / 2) / (W / 2)) ** 2 + ((yy - H / 2) / (H / 2)) ** 2
     img *= (1 - vignette * np.clip(d - 0.25, 0, 1.4) / 1.4)[:, :, None]
