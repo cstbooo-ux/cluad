@@ -257,19 +257,42 @@ def cirrus(ctx, y0, y1, tone, seed, t=0.0, a=0.35, n=14):
         line(ctx, pts, tone, rnd.uniform(2, 5), a * rnd.uniform(0.5, 1.0))
 
 
+def cloud_deck(ctx, T, tones, seed=0, horizon=820, scroll=0.0, speed=1.0, haze=None, density=1.0, scale=1.0, a=1.0):
+    """One continuous far cloud bank along the horizon: two rows of overlapping cumulus sprites (a hazier back row
+    with towers, a front row of broad cumulus) that merge into a single mass, sitting on a soft haze floor.
+    `scroll` is the horizontal camera offset in px (already scaled for distance); drift is slow."""
+    from . import clouds
+    rnd = random.Random(seed)
+    span = W + 2000
+    hz = haze or tones[2]
+    rows = ((horizon - 40, (420, 900), 0.4, 0.5, 0.92, 0.6, 1.0),        # yb, widths, spacing, haze, alpha, tower, par
+            (horizon + 25, (620, 980), 0.42, 0.25, 1.0, 0.45, 1.25))
+    for r, (yb, (w0, w1), sp, hm, al, tw, par) in enumerate(rows):
+        tn = tuple(mix(c, hz, hm) for c in tones) if haze else tones
+        sp = sp + 0.25 * (1 - min(1.0, density))
+        x, k = rnd.uniform(0, 300), 0
+        items = []
+        while x < span:
+            wd = rnd.uniform(w0, w1) * scale
+            items.append((x, wd, rnd.uniform(-14, 14) * scale, min(1.0, max(0.0, tw + rnd.uniform(-0.5, 0.5))), k))
+            x += wd * sp * rnd.uniform(0.8, 1.15)
+            k += 1
+        off = scroll * par + T * speed * 4 * par
+        for x0, wd, dy, twk, k in items:
+            xx = (x0 - off) % span - 1000
+            if -wd < xx < W + wd:
+                clouds.draw(ctx, xx, yb + dy, wd, tn, clouds.pick(seed * 97 + r * 31 + k, twk), al * a, flip=False)
+    # haze floor: the bases dissolve into the distant murk instead of ending on a hard line
+    fl = mix(tones[1], hz, 0.6)
+    g = cairo.LinearGradient(0, horizon - 30, 0, horizon + 420)
+    g.add_color_stop_rgba(0, *fl, 0.0)
+    g.add_color_stop_rgba(0.2, *fl, 0.85 * a)
+    g.add_color_stop_rgba(1, *fl, 0.55 * a)
+    ctx.rectangle(-200, horizon - 30, W + 400, 2000); ctx.set_source(g); ctx.fill()
+
+
 def sky_clouds(ctx, T, tones, seed=0, scroll=0.0, speed=1.0, density=1.0, haze=None, horizon=820, scale=1.0):
-    """A full layered cloudscape: cirrus, far stratus, mid cumulus bank, near towers (parallax by scroll)."""
-    sh, body, lit, hi = tones
-    cirrus(ctx, 60, 260, lit, seed + 1, t=T, a=0.3)
-    stratus(ctx, horizon - 80 - scroll * 0.05, 26, mix(body, haze or lit, 0.5), seed + 2, t=T, speed=8 * speed, a=0.55)
-    rnd = random.Random(seed + 3)
-    span = W + 1400
-    for layer, (yb, wmin, wmax, cnt, par, alpha) in enumerate(((horizon - 60, 220, 420, 7, 0.1, 0.75),
-                                                              (horizon + 40, 380, 720, 5, 0.35, 0.92),
-                                                              (horizon + 190, 700, 1200, 3, 0.8, 1.0))):
-        for i in range(int(cnt * density)):
-            wdt = rnd.uniform(wmin, wmax) * scale
-            x = (rnd.uniform(0, span) - T * (15 + 70 * par) * speed - scroll * par) % span - 700
-            yy = yb + rnd.uniform(-30, 30) - scroll * par * 0.3
-            tn = tuple(mix(c, haze, 0.45 * (1 - par)) if haze else c for c in tones)
-            cumulus_rich(ctx, x, yy, wdt, tn, seed * 31 + layer * 7 + i, a=alpha, tower=rnd.uniform(0.0, 1.0), t=T)
+    """Far cloudscape: high cirrus plus one continuous cumulus bank on the horizon (see cloud_deck)."""
+    cirrus(ctx, 60, 260, tones[2], seed + 1, t=T, a=0.25)
+    cloud_deck(ctx, T, tones, seed + 3, horizon=horizon, scroll=scroll, speed=speed, haze=haze, density=density,
+               scale=scale)

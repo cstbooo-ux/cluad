@@ -57,10 +57,12 @@ def kent_background(ctx, pan, T, redness=0.0, tilt=0.0, climb=0.0):
     def layer(f):
         ctx.save(); ctx.translate(-pan * f, tilt + climb * f)
     sky(ctx, redness)
-    sun(ctx, 1500 - pan * 0.01, 300 + tilt * 0.95, 70, redness)
-    ctx.save(); ctx.translate(0, tilt + climb * 0.06)
-    L.sky_clouds(ctx, T, L.tones_mix("gold", "red", redness), seed=5, scroll=pan * 0.9, speed=0.3,
-                 density=0.6, haze=mix("#f4d193", HAZE, redness), horizon=540, scale=0.8)
+    # sun and clouds are very far away: they barely move while the fields fall away below (calm sky before the battle)
+    sky_dy = tilt * 0.3 + climb * 0.04
+    sun(ctx, 1500 - pan * 0.01, 300 + sky_dy, 70, redness)
+    ctx.save(); ctx.translate(0, sky_dy)
+    L.sky_clouds(ctx, T, L.tones_mix("gold", "red", redness), seed=5, scroll=pan * 0.04, speed=0.4,
+                 density=1.0, haze=mix("#f4d193", HAZE, redness), horizon=560, scale=0.62)
     ctx.restore()
     layer(0.05)
     L.rolling_field(ctx, 640, 26, mix(KENT["far"], "#9a4a3a", redness), seed=1, freq=0.5)
@@ -129,26 +131,17 @@ def shot_kent_throw(ctx, u, T, pan=700.0, k=None, fly=0.0):
     return pose
 
 
-CLOUD_PASSES = [(8.4, 0.55, 780, 1.0), (9.9, 0.5, 300, 0.8), (11.2, 0.5, 860, 1.2), (12.2, 0.45, 250, 1.0),
-                (12.8, 0.38, 760, 1.4), (13.08, 0.26, 180, 1.1)]      # (start, duration, y, scale): clouds rushing past
-
-
 def shot_follow_plane(ctx, u, T, redness=0.0, tilt=0.0, climb=0.0, plane_xy=(820, 560), size=260, pitch=0.38,
                       pan=700.0, craft="paper"):
     """Camera rides with the paper plane: the camera pitches up and climbs, the fields fall away with proper
-    parallax, near clouds descend into view from above, the sky turns from gold to red.
+    parallax, the far cloud bank stays calm on the horizon, the sky turns from gold to red.
     craft='spitfire' draws the fighter in exactly the same pose (the transformation)."""
-    tones = L.tones_mix("gold", "red", redness)
     kent_background(ctx, pan, T, redness=redness, tilt=tilt, climb=climb)
     kent_ground(ctx, pan, T, drop=tilt + climb)
     if tilt + climb < 600:                               # the boy, left behind on the hillock
         ctx.save(); ctx.translate(0, tilt + climb)
         child(ctx, 1880 - pan, ground_y(1880) + 4, 250, 0.0, throw=1.0)
         ctx.restore()
-    f = 0.6                                              # a bank of clouds above, descending as we climb into it
-    for i in range(4):
-        L.cumulus_rich(ctx, (2400 - (pan * f + i * 650)) % 2600 - 350, -420 - (i % 2) * 160 + tilt + climb * f,
-                       780, tones, 60 + i, a=0.93, tower=0.5, t=T)
     x, y = plane_xy
     yy, pp = y + 6 * math.sin(T * 2.3), pitch + 0.03 * math.sin(T * 1.7)
     if craft == "paper":
@@ -157,12 +150,6 @@ def shot_follow_plane(ctx, u, T, redness=0.0, tilt=0.0, climb=0.0, plane_xy=(820
         pass
     else:
         A.aircraft(ctx, "spitfire", x, yy, size, pitch=pp, prop_t=T, light=RED_LIGHT, light_amt=0.45)
-    for i, (t0, dur, cy, sc) in enumerate(CLOUD_PASSES):        # clouds whipping past in front of the camera
-        q = (T - t0) / dur
-        if 0 <= q <= 1:
-            w = 1300 * sc
-            cx = W + w * 0.6 - q * (W + w * 1.2)
-            L.cumulus_rich(ctx, cx, cy + w * 0.12 + q * 90, w, tones, 300 + i, a=0.96, tower=0.8, t=T)
 
 
 # ================================================================== air traffic
@@ -379,7 +366,7 @@ def battle_sky(ctx, T, scroll=0.0, tilt=0.0, smoke=True, bombers=None, flak_n=10
         ctx.translate(W / 2, H / 2); ctx.rotate(tilt); ctx.scale(1.25, 1.25); ctx.translate(-W / 2, -H / 2)
     sky(ctx, 1.0)
     sun(ctx, 1450, 700, 60, 1.0)
-    L.sky_clouds(ctx, T, RED_TONES, seed=31 + seed, scroll=scroll, speed=cloud_speed, haze=HAZE, horizon=760)
+    L.sky_clouds(ctx, T, RED_TONES, seed=31 + seed, scroll=scroll * 0.3, speed=cloud_speed, haze=HAZE, horizon=760)
     if smoke:
         fx.smoke(ctx, 300, 1100, 900, 60, "#2a0c0c", seed=33, t=T, a=0.55, lean=0.35)
         fx.smoke(ctx, 1650, 1100, 700, 45, "#2a0c0c", seed=34, t=T, a=0.45, lean=-0.2)
