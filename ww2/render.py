@@ -698,7 +698,7 @@ def choreograph():
     for k in range(5):
         boom(-1.0 + 0.2 * k, 49.36 + 0.03 * math.sin(k), tsm + 0.5 + 0.15 * k, 16, (1.0, 0.8, 0.6))
     te = ch("dday", 1, True)
-    off("france_occ", te - 0.2, 2.2, (-0.6, 49.3))
+    off("france_occ", tsm + 0.2, 2.8, (-0.6, 49.3))
     off("vichy", te + 0.2, 1.6, (5.5, 43.2))
     off("italy_s", te, 1.2, (15.5, 38))
     off("ussr41", te - 0.1, 2.4, (38, 55))
@@ -731,7 +731,7 @@ def choreograph():
     CAM.k(pa["tv"] + 0.4, 152, 17, 15)
     CAM.k(pa["t1"], 142, 22, 18)
     DATES.append((t0, 1945, 6))
-    label("tokyo", pa["tv"], END["flash1"])
+    label("tokyo", pa["tv"], END["hiro_t0"] + 0.2)
     tc0 = ch("pacific", 0)
     chain = [((202, 21.4), (186, 10), (172.9, 1.5)), ((172.9, 1.5), (169.5, 6), (167.7, 8.7)),
              ((167.7, 8.7), (156, 12.5), (145.7, 15.2))]
@@ -1472,8 +1472,8 @@ def text_cards(frame, t):
         date, tm, name = script.CARDS[key]
         full = f"{date}  {tm}"
         k = int(len(full) * clamp((t - a) / 1.0))
-        blit(frame, sprite(full[:k] if k else " ", "osw", 78, WHITE, wght=600, track=6, shadow=6), W / 2, 150, al, "ct")
-        blit(frame, sprite(name, "sansb", 36, (1.0, 0.82, 0.74), track=8, shadow=4), W / 2, 262, al * ss(a + 0.8, a + 1.1, t), "ct")
+        blit(frame, sprite(full[:k] if k else " ", "osw", 78, WHITE, wght=600, track=6, shadow=6), W / 2, H - 300, al, "ct")
+        blit(frame, sprite(name, "sansb", 36, (1.0, 0.82, 0.74), track=8, shadow=4), W / 2, H - 188, al * ss(a + 0.8, a + 1.1, t), "ct")
 
 
 def ending_texts(frame, t):
