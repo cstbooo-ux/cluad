@@ -1,7 +1,7 @@
-# Archival audio sources
+# 历史原声
 
-No archival files have been added yet. The fetch session could not reach Wikimedia
-Commons or archive.org (proxy 403). See `../STATUS.md`.
+目前没有收录：当前环境无法访问 Wikimedia Commons 和 archive.org（出站代理 403），
+成片里这三处用屏幕引语卡代替（张伯伦 1938、罗斯福 1941），杜鲁门声明由离线配音朗读并标注"白宫声明"。
 
-When files are added, record for each one: source page URL, direct file URL,
-license / public-domain rationale, original date, and trim range.
+补录时每个文件请记录：来源页面、文件直链、许可 / 公有领域依据、原始日期、截取区间，
+并在 `../archival_cuts.json` 写入起止秒数。

@@ -5,7 +5,14 @@
 """
 import asyncio, json, os, sys
 
-import edge_tts
+import certifi
+
+# 云端环境的出站代理会重签 TLS 证书；edge-tts 固定用 certifi 的证书库，这里改指向环境 CA
+_CA = os.environ.get("SSL_CERT_FILE") or ("/root/.ccr/ca-bundle.crt" if os.path.exists("/root/.ccr/ca-bundle.crt") else None)
+if _CA:
+    certifi.where = lambda: _CA
+
+import edge_tts  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)

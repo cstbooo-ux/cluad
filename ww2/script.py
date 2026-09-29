@@ -29,12 +29,12 @@ VOICES = {
 # archival: 可选的真实原声（文件缺失时改为屏幕引语卡，不用合成声音冒充真人）
 SEGMENTS = [
     dict(id="rhineland", st="berlin", lang="de", y=1936, m=3,
-         text="Siebter März 1936.|Deutsche Truppen marschieren in das entmilitarisierte Rheinland ein.|"
+         text="Deutsche Truppen marschieren in das entmilitarisierte Rheinland ein.|"
               "Paris und London protestieren – und tun nichts.",
-         zh="1936年3月7日。|德军开进非军事区莱茵兰。|巴黎和伦敦提出抗议——然后什么也没做。"),
+         zh="1936年3月，德军开进非军事区莱茵兰。|巴黎和伦敦提出抗议——然后什么也没做。"),
     dict(id="marcopolo", st="nanking", lang="zh", y=1937, m=7,
-         text="1937年7月7日，卢沟桥的枪声响起，|全面抗战爆发。|12月，南京沦陷，日军屠城。",
-         zh="1937年7月7日，卢沟桥的枪声响起，|全面抗战爆发。|12月，南京沦陷，日军屠城。"),
+         text="卢沟桥的枪声响起，|全面抗战爆发。|12月，南京沦陷，日军屠城。",
+         zh="卢沟桥的枪声响起，|全面抗战爆发。|12月，南京沦陷，日军屠城。"),
     dict(id="munich", st="london", lang="gb", y=1938, m=3,
          text="March 1938: Germany annexes Austria.|In September, at Munich, "
               "Britain and France hand Hitler the Sudetenland.",
@@ -42,23 +42,21 @@ SEGMENTS = [
          archival=dict(file="chamberlain_peace.wav", who="张伯伦", en="I believe it is peace for our time.",
                        zh="我相信，这是我们时代的和平。")),
     dict(id="poland", st="warszawa", lang="pl", y=1939, m=9,
-         text="Uwaga, uwaga!|Pierwszy września, godzina czwarta czterdzieści pięć.|"
-              "Wojska niemieckie przekroczyły granicę Polski.",
-         zh="注意，注意！|9月1日凌晨4点45分，|德军越过波兰边境。"),
+         text="Uwaga, uwaga!|Wojska niemieckie przekroczyły granicę Polski.",
+         zh="注意，注意！|德军越过波兰边境。"),
     dict(id="declare", st="london", lang="gb", y=1939, m=9,
-         text="September the third.|Britain and France declare war on Germany.",
-         zh="9月3日，|英法对德宣战。"),
+         text="Britain and France declare war on Germany.",
+         zh="9月3日，英法对德宣战。"),
     dict(id="france", st="paris", lang="fr", y=1940, m=5,
          text="Mai 1940. Les blindés allemands percent à travers les Ardennes.|"
               "Le 14 juin, ils défilent dans Paris.",
          zh="1940年5月，德军装甲部队突破阿登森林。|6月14日，他们开进了巴黎。"),
     dict(id="blitz", st="london", lang="gb", y=1940, m=9,
-         text="Britain stands alone.|Night after night, the bombers come.",
-         zh="英国孤军奋战。|一夜又一夜，轰炸机如期而至。"),
+         text="Night after night, the bombers come.",
+         zh="一夜又一夜，轰炸机飞临伦敦。"),
     dict(id="barbarossa", st="moskva", lang="ru", y=1941, m=6,
-         text="Внимание, говорит Москва!|Двадцать второго июня, без объявления войны,|"
-              "германские войска напали на Советский Союз.",
-         zh="注意，这里是莫斯科！|6月22日，德军不宣而战，|进攻苏联。"),
+         text="Внимание, говорит Москва!|Без объявления войны германские войска напали на Советский Союз.",
+         zh="注意，这里是莫斯科！|德军不宣而战，进攻苏联。"),
     dict(id="pearl", st="washington", lang="us", y=1941, m=12,
          text="Sunday morning, December seventh.|Japanese planes strike Pearl Harbor.",
          zh="12月7日，星期天早晨。|日本飞机突袭珍珠港。",
@@ -69,14 +67,14 @@ SEGMENTS = [
          text="大本営発表。|帝国陸海軍は、香港、マニラ、シンガポールを、相次いで攻略せり。",
          zh="大本营发表：|帝国陆海军相继攻占香港、马尼拉、新加坡。"),
     dict(id="midway", st="washington", lang="us", y=1942, m=6,
-         text="June 1942. Midway.|Four Japanese carriers, sunk in a single day.",
-         zh="1942年6月，中途岛。|日本四艘航母，一天之内全部沉没。"),
+         text="Midway.|Four Japanese carriers, sunk in a single day.",
+         zh="中途岛。|日本四艘航母，一天之内全部沉没。"),
     dict(id="stalingrad", st="moskva", lang="ru", y=1943, m=2,
          text="Сталинград. Двести дней боёв.|Второго февраля шестая германская армия капитулировала.",
          zh="斯大林格勒。两百天的血战。|2月2日，德军第六集团军投降。"),
     dict(id="dday", st="london", lang="gb", y=1944, m=6,
-         text="June the sixth, 1944. D-Day.|The Allies storm the beaches of Normandy.",
-         zh="1944年6月6日，D日。|盟军冲上诺曼底海滩。"),
+         text="D-Day.|The Allies storm the beaches of Normandy.",
+         zh="D日。|盟军冲上诺曼底海滩。"),
     dict(id="berlin", st="moskva", lang="ru", y=1945, m=5,
          text="Берлин взят!|Германия капитулировала.|Победа!",
          zh="柏林已被攻克！|德国投降。|胜利！"),
@@ -103,4 +101,4 @@ CARDS = {
     "title": ("从莱茵兰到长崎", "1936 — 1945"),
 }
 
-RATE = "+12%"
+RATE = "+20%"
