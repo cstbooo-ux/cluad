@@ -153,7 +153,7 @@ def ash(ctx, t, seed, n=80, c="#3a3030"):
 def smoke(ctx, x, base, h, width, c, seed, t=0.0, a=0.85, lean=0.25, rise=18.0):
     """Billowing smoke column as one merged flat shape, slowly rolling upward."""
     rnd = random.Random(seed)
-    n = 16
+    n = max(16, int(h / (width * 0.3)))
     ctx.push_group()
     for i in range(n):
         tt = i / (n - 1)

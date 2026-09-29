@@ -162,3 +162,105 @@ def wildflowers(ctx, y, x0, x1, c, seed, n=20, t=0.0):
         sw = 3 * math.sin(t * 2 + x)
         line(ctx, [(x, y), (x + sw, y - hh)], c, 2)
         circle(ctx, x + sw, y - hh, rnd.uniform(4, 7), c)
+
+
+# ---------------------------------------------------------------- richer skies
+CLOUD_TONES = {
+    # shadow, body, lit, highlight
+    "gold": ("#c8ab8c", "#ebdcc2", "#f8eedc", "#fffaf0"),
+    "red": ("#4e1216", "#8a2c2a", "#c65a40", "#f09a66"),
+    "dusk": ("#6a3a3a", "#a86a5a", "#dca080", "#f6d0a8"),
+}
+
+
+def tones_mix(a, b, t):
+    return tuple(mix(x, y, t) for x, y in zip(CLOUD_TONES[a], CLOUD_TONES[b]))
+
+
+def cumulus_rich(ctx, x, y, w, tones, seed, a=1.0, light=(0.55, -0.85), tower=0.6, t=0.0):
+    """Cel-shaded cumulus: one puffy mass (optional tower) with a flat base. The whole mass is lit as a unit:
+    a lit crescent on the side facing `light`, a thin hot rim inside it, and a shadowed underside.
+    tones = (shadow, body, lit, highlight)."""
+    rnd = random.Random(seed)
+    sh, body, lit, hi = [hx(c) if isinstance(c, str) else c for c in tones]
+    puffs = []
+    n = max(7, int(w / 26))
+    for i in range(n):
+        tt = i / (n - 1)
+        dome = math.sin(math.pi * tt) ** 0.8
+        tw = tower * math.exp(-((tt - 0.45) / 0.18) ** 2)
+        r = w * (0.06 + 0.11 * dome + 0.07 * tw) * rnd.uniform(0.85, 1.15)
+        cy = y - r * 0.45 - dome * w * 0.07 - tw * w * 0.22
+        puffs.append((x - w / 2 + w * tt + rnd.uniform(-w * 0.015, w * 0.015), cy, r))
+        if tw > 0.25 or rnd.random() < 0.3:
+            puffs.append((puffs[-1][0] + rnd.uniform(-r, r) * 0.5, cy - r * rnd.uniform(0.55, 0.85),
+                          r * rnd.uniform(0.55, 0.75)))
+
+    def mass(dx=0.0, dy=0.0, k=1.0):
+        for px, py, r in puffs:
+            ctx.new_sub_path(); ctx.arc(px + dx, py + dy, r * k, 0, TAU)
+
+    lx, ly = light
+    d = w * 0.09
+    ctx.push_group()
+    mass(); ctx.set_source_rgb(*lit); ctx.fill()                              # lit everywhere ...
+    ctx.set_operator(cairo.OPERATOR_ATOP)
+    mass(-lx * d, -ly * d); ctx.set_source_rgb(*body); ctx.fill()            # ... except away from the light
+    ctx.set_operator(cairo.OPERATOR_OVER)
+    ctx.save()
+    mass(); ctx.clip()
+    ctx.push_group()                                                          # thin hot rim on the lit edge
+    mass(); ctx.set_source_rgb(*hi); ctx.fill()
+    ctx.set_operator(cairo.OPERATOR_DEST_OUT)
+    mass(-lx * d * 0.22, -ly * d * 0.22); ctx.set_source_rgb(0, 0, 0); ctx.fill()
+    ctx.set_operator(cairo.OPERATOR_OVER)
+    ctx.pop_group_to_source(); ctx.paint_with_alpha(0.7)
+    g = cairo.LinearGradient(0, y - w * 0.26, 0, y)                           # shadowed underside
+    g.add_color_stop_rgba(0, *sh, 0.0); g.add_color_stop_rgba(0.75, *sh, 0.7); g.add_color_stop_rgba(1, *sh, 0.95)
+    ctx.rectangle(x - w, y - w * 0.26, 2 * w, w * 0.26); ctx.set_source(g); ctx.fill()
+    ctx.restore()
+    ctx.set_operator(cairo.OPERATOR_CLEAR)
+    rect(ctx, x - w, y, 2 * w, w * 2, "#000000")                              # flat base
+    ctx.set_operator(cairo.OPERATOR_OVER)
+    for k in range(3):                                                        # torn wisps under the base
+        wx = x + rnd.uniform(-0.45, 0.45) * w
+        ellipse(ctx, wx + 20 * math.sin(t * 0.3 + k), y + w * 0.006, w * rnd.uniform(0.1, 0.22), w * 0.01, sh, 0.5)
+    ctx.pop_group_to_source(); ctx.paint_with_alpha(a)
+
+
+def stratus(ctx, y, h, tone, seed, t=0.0, speed=10.0, a=0.6, n=10):
+    """Long hazy bands (distant cloud layers)."""
+    rnd = random.Random(seed)
+    for _ in range(n):
+        w = rnd.uniform(300, 900)
+        x = (rnd.uniform(0, W + 1200) - t * speed) % (W + 1200) - 600
+        ellipse(ctx, x, y + rnd.uniform(-h, h), w, h * rnd.uniform(0.25, 0.6), tone, a * rnd.uniform(0.5, 1.0))
+
+
+def cirrus(ctx, y0, y1, tone, seed, t=0.0, a=0.35, n=14):
+    """High thin streaks."""
+    rnd = random.Random(seed)
+    for _ in range(n):
+        x = (rnd.uniform(0, W + 600) - t * 6) % (W + 600) - 300
+        y = rnd.uniform(y0, y1)
+        L = rnd.uniform(120, 420)
+        pts = [(x + L * q / 8, y - 18 * math.sin(q / 8 * math.pi) + q * 1.5) for q in range(9)]
+        line(ctx, pts, tone, rnd.uniform(2, 5), a * rnd.uniform(0.5, 1.0))
+
+
+def sky_clouds(ctx, T, tones, seed=0, scroll=0.0, speed=1.0, density=1.0, haze=None, horizon=820, scale=1.0):
+    """A full layered cloudscape: cirrus, far stratus, mid cumulus bank, near towers (parallax by scroll)."""
+    sh, body, lit, hi = tones
+    cirrus(ctx, 60, 260, lit, seed + 1, t=T, a=0.3)
+    stratus(ctx, horizon - 80 - scroll * 0.05, 26, mix(body, haze or lit, 0.5), seed + 2, t=T, speed=8 * speed, a=0.55)
+    rnd = random.Random(seed + 3)
+    span = W + 1400
+    for layer, (yb, wmin, wmax, cnt, par, alpha) in enumerate(((horizon - 60, 220, 420, 7, 0.1, 0.75),
+                                                              (horizon + 40, 380, 720, 5, 0.35, 0.92),
+                                                              (horizon + 190, 700, 1200, 3, 0.8, 1.0))):
+        for i in range(int(cnt * density)):
+            wdt = rnd.uniform(wmin, wmax) * scale
+            x = (rnd.uniform(0, span) - T * (15 + 70 * par) * speed - scroll * par) % span - 700
+            yy = yb + rnd.uniform(-30, 30) - scroll * par * 0.3
+            tn = tuple(mix(c, haze, 0.45 * (1 - par)) if haze else c for c in tones)
+            cumulus_rich(ctx, x, yy, wdt, tn, seed * 31 + layer * 7 + i, a=alpha, tower=rnd.uniform(0.0, 1.0), t=T)
