@@ -11,7 +11,7 @@ from silhouette_kit.core import (W, H, hx, mix, src, poly, fill_poly, rect, circ
 from silhouette_kit import landscape as L
 from silhouette_kit import aircraft as A
 from silhouette_kit import fx
-from silhouette_kit.child import child
+from silhouette_kit.child import child, run_travel
 from silhouette_kit.pilot import pilot_profile, spade_grip
 
 TAU = 2 * math.pi
@@ -54,8 +54,7 @@ def kent_background(ctx, pan, T, redness=0.0, drop=0.0):
     sun(ctx, 1500 - pan * 0.02, 300 + drop * 0.1, 70, redness)
     ctx.save(); ctx.translate(0, drop * 0.2)
     L.sky_clouds(ctx, T, L.tones_mix("gold", "red", redness), seed=5, scroll=pan * 0.3, speed=0.3,
-                 density=0.5 + 0.4 * redness, haze=mix("#f4d193", HAZE, redness), horizon=520 + 80 * redness,
-                 scale=0.7 + 0.3 * redness)
+                 density=0.6, haze=mix("#f4d193", HAZE, redness), horizon=540, scale=0.8)
     ctx.restore()
     ctx.save(); ctx.translate(-pan * 0.05, drop * 0.4)
     L.rolling_field(ctx, 640, 26, mix(KENT["far"], "#9a4a3a", redness), seed=1, freq=0.5)
@@ -96,12 +95,12 @@ def ground_y(xw, hill=True):
     return y
 
 
-def shot_kent_run(ctx, u, T, boy_x=None, pan=0.0):
+def shot_kent_run(ctx, u, T, boy_x=None, pan=0.0, phase=None):
     """0-~4.5 s: the boy runs left -> right holding the paper plane."""
     kent_background(ctx, pan, T)
     kent_ground(ctx, pan, T)
     xw = boy_x if boy_x is not None else -120 + u * 1500
-    ph = T / 0.36
+    ph = T / 0.36 if phase is None else phase
     r = child(ctx, xw - pan, ground_y(xw) + 4, 250, ph, run=1.0)
     A.paper_plane(ctx, r["hand"][0] + 4, r["hand"][1] - 6, 58, pitch=0.25)
     L.grass(ctx, H - 40, -100, W + 100, 70, KENT["fg"], seed=9, t=T, density=12)
@@ -115,23 +114,39 @@ def shot_kent_throw(ctx, u, T, pan=700.0, k=None, fly=0.0):
     k = min(1.0, u * 1.2) if k is None else k
     r = child(ctx, xw - pan, ground_y(xw) + 4, 250, 0.0, throw=k)
     if k < 0.5:
-        A.paper_plane(ctx, r["hand"][0], r["hand"][1] - 6, 58, pitch=0.5)
+        pose = (r["hand"][0], r["hand"][1] - 6, 58, 0.5)
     else:
         q = max((k - 0.5) / 0.5, fly)
-        A.paper_plane(ctx, r["hand"][0] + q * 520, r["hand"][1] - 20 - q * 300, 58 + q * 40, pitch=0.42)
+        pose = (r["hand"][0] + q * 520, r["hand"][1] - 20 - q * 300, 58 + q * 40, 0.42)
+    A.paper_plane(ctx, pose[0], pose[1], pose[2], pitch=pose[3])
     L.grass(ctx, H - 40, -100, W + 100, 70, KENT["fg"], seed=9, t=T, density=12)
+    return pose
 
 
-def shot_follow_plane(ctx, u, T, redness=0.0, drop=0.0, plane_xy=(820, 560), size=260, pitch=0.38):
-    """Camera rides with the paper plane: fields fall away, sky turns from gold to red."""
-    kent_background(ctx, 700 + u * 400, T, redness=redness, drop=drop)
-    # passing clouds give the sense of flight
-    for i in range(3):                                  # near clouds sliding past the plane
-        L.cumulus_rich(ctx, (1900 - (T * 260 + i * 700)) % 2600 - 350, 980 + drop * 0.2 - i * 40, 760,
-                       L.tones_mix("gold", "red", redness), 60 + i, a=0.92, tower=0.5, t=T)
+CLOUD_PASSES = [(8.4, 0.55, 780, 1.0), (9.9, 0.5, 300, 0.8), (11.2, 0.5, 860, 1.2), (12.2, 0.45, 250, 1.0),
+                (12.85, 0.4, 700, 1.5), (13.22, 0.3, 520, 2.4)]      # (start, duration, y, scale): clouds rushing past
+
+
+def shot_follow_plane(ctx, u, T, redness=0.0, drop=0.0, plane_xy=(820, 560), size=260, pitch=0.38, pan=700.0):
+    """Camera rides with the paper plane: fields fall away, sky turns from gold to red, clouds rush past."""
+    tones = L.tones_mix("gold", "red", redness)
+    kent_background(ctx, pan, T, redness=redness, drop=drop)
+    kent_ground(ctx, pan, T, drop=drop * 1.2)
+    if drop < 400:                                       # the boy, left behind on the hillock
+        ctx.save(); ctx.translate(0, drop * 1.2)
+        child(ctx, 1880 - pan, ground_y(1880) + 4, 250, 0.0, throw=1.0)
+        ctx.restore()
+    for i in range(3):                                  # steady near clouds sliding past, below the plane
+        L.cumulus_rich(ctx, (1900 - (pan * 0.6 + i * 700)) % 2600 - 350,
+                       1500 - i * 40 - 520 * min(1, drop / 900), 760, tones, 60 + i, a=0.92, tower=0.5, t=T)
     x, y = plane_xy
     A.paper_plane(ctx, x, y + 6 * math.sin(T * 2.3), size, pitch=pitch + 0.03 * math.sin(T * 1.7))
-
+    for i, (t0, dur, cy, sc) in enumerate(CLOUD_PASSES):        # clouds whipping past in front of the camera
+        q = (T - t0) / dur
+        if 0 <= q <= 1:
+            w = 1300 * sc
+            cx = W + w * 0.6 - q * (W + w * 1.2)
+            L.cumulus_rich(ctx, cx, cy + w * 0.12, w, tones, 300 + i, a=0.96, tower=0.8, t=T)
 
 
 # ================================================================== air traffic
@@ -158,6 +173,20 @@ def smoke_trail(ctx, pts, w0, w1, c, a=0.8, fire=False, T=0.0):
         fx.flames(ctx, pts[0][0], pts[0][1] + 8, 24, 30, T, seed=int(abs(pts[0][0])) % 97)
 
 
+def streaming(ctx, T, xy, pitch, speed, nose, size, life=1.2, a=0.5, seed=0, fire=False, flip=False):
+    """Smoke from the engine of a plane the camera is tracking: every puff stays in the air where it was emitted,
+    so relative to the camera it streams backwards at the plane's airspeed, grows and fades.
+    Returns the engine position (for flames)."""
+    d = -1 if flip else 1
+    dx, dy = d * math.cos(pitch), -math.sin(pitch)            # nose direction on screen (pitch = nose-up)
+    ex, ey = xy[0] + dx * nose * 0.72, xy[1] + dy * nose * 0.72 + size * 0.02
+    pos = lambda tau: (ex + (tau - T) * speed * dx, ey + (tau - T) * speed * dy)
+    fx.trail_smoke(ctx, pos, T, life=life, dt=0.025, r0=size * 0.03, r1=size * 0.28, dark="#120505",
+                   hot="#ffb048" if fire else None, fade_to="#8a3a30", a=a, rise=60, wind=(0, 0), seed=seed,
+                   turbulence=size * 0.04)
+    return ex, ey
+
+
 def parachute(ctx, x, y, s, c, T):
     sw = 0.12 * math.sin(T * 1.3 + x)
     ctx.save(); ctx.translate(x, y); ctx.rotate(sw)
@@ -168,83 +197,141 @@ def parachute(ctx, x, y, s, c, T):
     ctx.restore()
 
 
-def _track(T, x0, y0, vx, vy, margin=600):
-    """Position of a plane that loops across the screen; descending planes re-enter from the top of their lane."""
-    span = W + 2 * margin
-    raw = x0 + vx * T
-    lap = math.floor(raw / span)
-    x = raw - lap * span - margin
-    local = (x + margin) / abs(vx) if vx > 0 else (span - (x + margin)) / abs(vx)
-    return (x if vx > 0 else W - x), y0 + vy * local, lap
+class Flyer:
+    """One aircraft on a curved path, respawning every `period` seconds with fresh random parameters.
+
+    Kinematics (screen space, y down): constant turn rate on top of a straight heading, plus gravity for planes that
+    are going down. The nose always points along the velocity."""
+
+    TYPES = {"spitfire": 1.0, "bf109": 1.08, "he111": 0.62}
+
+    def __init__(self, seed, zmax, y_band):
+        self.seed, self.zmax, self.y_band = seed, zmax, y_band
+        r = random.Random(seed)
+        self.period = r.uniform(3.2, 6.5)
+        self.offset = r.uniform(0, self.period)
+
+    def params(self, cycle):
+        r = random.Random(self.seed * 7919 + cycle * 104729)
+        z = (r.random() ** 1.3) * self.zmax
+        kind = r.choices(["spitfire", "bf109", "he111"], [0.42, 0.42, 0.16 if z < 0.4 else 0.03])[0]
+        right = r.random() < 0.5
+        state = r.choices(["ok", "smoking", "burning", "glide"], [0.6, 0.15, 0.15, 0.10])[0]
+        size = (70 + 330 * z) * (1.35 if kind == "he111" else 1.0)
+        speed = (240 + 900 * z) * self.TYPES[kind] * r.uniform(0.7, 1.35)
+        if state == "glide":
+            speed *= 0.6
+        h0 = r.uniform(-0.3, 0.3)
+        if state == "glide":
+            h0 = r.uniform(0.12, 0.22)
+        if state in ("smoking", "burning"):
+            h0 = r.uniform(-0.05, 0.25)
+        turn = r.uniform(-0.35, 0.35) if state == "ok" else r.uniform(-0.12, 0.12)
+        if not right:
+            h0 = math.pi - h0
+            turn = -turn
+        g = {"ok": 0.0, "smoking": r.uniform(60, 120), "burning": r.uniform(220, 380), "glide": 0.0}[state] * (0.5 + z)
+        margin = size * 0.8 + 60
+        x0 = -margin if right else W + margin
+        y0 = r.uniform(*self.y_band)
+        if state in ("smoking", "burning"):
+            y0 = r.uniform(self.y_band[0], (self.y_band[0] + self.y_band[1]) / 2)
+        return dict(z=z, kind=kind, state=state, size=size, v=speed, h0=h0, w=turn, g=g, x0=x0, y0=y0,
+                    chase=(state == "ok" and r.random() < 0.4), roll=r.uniform(4, 8), rs=r.random())
+
+    def pos(self, P, a):
+        if a < 0:
+            return None
+        v, h0, w = P["v"], P["h0"], P["w"]
+        if abs(w) < 1e-3:
+            x = P["x0"] + v * a * math.cos(h0)
+            y = P["y0"] + v * a * math.sin(h0)
+        else:
+            x = P["x0"] + v / w * (math.sin(h0 + w * a) - math.sin(h0))
+            y = P["y0"] - v / w * (math.cos(h0 + w * a) - math.cos(h0))
+        return x, y + 0.5 * P["g"] * a * a
+
+    def vel(self, P, a):
+        h = P["h0"] + P["w"] * a
+        return P["v"] * math.cos(h), P["v"] * math.sin(h) + P["g"] * a
+
+    def at(self, T):
+        c = math.floor((T + self.offset) / self.period)
+        return c, (T + self.offset) - c * self.period
 
 
 def air_traffic(ctx, T, seed=0, density=1.0, near=True, far=True, mid=True, y_band=(120, 900), ground=None,
                 zmax=1.0):
-    """Friendly and enemy aircraft sweeping through the scene at several depths.
-    states: 'ok', 'smoking', 'burning' (going down), 'glide' (dead engine, forced landing)."""
+    """Friendly and enemy aircraft on curved paths at several depths: dogfights, burning planes falling
+    under gravity, forced landings, parachutes; plus big close fly-bys."""
+    flyers = [Flyer(900 + seed * 131 + i, zmax, y_band) for i in range(int(14 * density))]
+    draw = []
+    for f in flyers:
+        c, a = f.at(T)
+        P = f.params(c)
+        if (P["z"] < 0.35 and not far) or (P["z"] >= 0.35 and not mid):
+            continue
+        draw.append((P["z"], f, P, a))
     rnd = random.Random(900 + seed)
-    items = []
-    n = int(14 * density)
-    for i in range(n):
-        z = (rnd.random() ** 1.4) * zmax
-        if (z < 0.35 and not far) or (z >= 0.35 and not mid):
-            continue
-        kind = rnd.choices(["spitfire", "bf109", "he111"], [0.4, 0.4, 0.2 if z < 0.5 else 0.05])[0]
-        d = rnd.choice((1, -1))
-        size = 70 + 300 * z if kind != "he111" else 120 + 280 * z
-        speed = (260 + 1100 * z) * d
-        state = rnd.choices(["ok", "smoking", "burning", "glide"], [0.62, 0.16, 0.12, 0.10])[0]
-        vy = abs(speed) * {"ok": rnd.uniform(-0.05, 0.05), "smoking": rnd.uniform(0.12, 0.25),
-                           "burning": rnd.uniform(0.35, 0.7), "glide": rnd.uniform(0.08, 0.15)}[state]
-        y0 = rnd.uniform(*y_band) - (vy * 1.2 if vy > 0 else 0)
-        items.append(dict(z=z, kind=kind, size=size, vx=speed, vy=vy, x0=rnd.uniform(0, 3000), y0=y0, state=state,
-                          pair=rnd.random() < 0.35 and state == "ok"))
-    for _ in range(int(3 * density)):                         # parachutes
-        items.append(dict(z=rnd.uniform(0.2, 0.6), kind="chute", x=rnd.uniform(100, W - 100),
-                          y0=rnd.uniform(150, 600), size=rnd.uniform(14, 30)))
-    items.sort(key=lambda it: it["z"])
-    for it in items:
-        z = it["z"]
+    chutes = [(rnd.uniform(0.2, 0.6), rnd.uniform(100, W - 100), rnd.uniform(150, 600), rnd.uniform(14, 30))
+              for _ in range(int(3 * density))]
+    for z, x, y0, sz in chutes:
+        draw.append((z, "chute", (x, y0, sz), 0))
+    draw.sort(key=lambda d: d[0])
+    for z, f, P, a in draw:
         haze = 0.75 * (1 - z)
-        if it["kind"] == "chute":
-            y = it["y0"] + (T * 18) % 500
-            parachute(ctx, it["x"] + 30 * math.sin(T * 0.4 + it["x"]), y, it["size"], mix("#1a0a0a", HAZE, haze), T)
+        if f == "chute":
+            x, y0, sz = P
+            parachute(ctx, x + 30 * math.sin(T * 0.4 + x), y0 + (T * 18) % 500, sz, mix("#1a0a0a", HAZE, haze), T)
             continue
-        x, y, lap = _track(T, it["x0"], it["y0"], it["vx"], it["vy"])
-        if ground and y > ground:
+        st = P["state"]
+        p = f.pos(P, a)
+        if ground and p[1] > ground:
             continue
-        flip = it["vx"] < 0
-        ang = math.atan2(it["vy"], abs(it["vx"]))
-        pitch = -ang
-        st = it["state"]
-        if st in ("smoking", "burning", "glide"):
-            trail = []
-            for k in range(18):
-                xk, yk, lk = _track(T - k * 0.035, it["x0"], it["y0"], it["vx"], it["vy"])
-                if lk != lap:
-                    break
-                back = -1 if not flip else 1
-                trail.append((xk + back * it["size"] * 0.1, yk - k * 1.5))
-            smoke_trail(ctx, trail, it["size"] * 0.025, it["size"] * {"smoking": 0.06, "burning": 0.09, "glide": 0.035}[st],
-                        mix("#140606", HAZE, haze * 0.8), a={"smoking": 0.6, "burning": 0.75, "glide": 0.4}[st],
-                        fire=(st == "burning" and z > 0.3), T=T)
-        A.aircraft(ctx, it["kind"], x, y, it["size"], pitch=pitch, flip=flip, prop_t=0 if st == "glide" else T,
-                   damage=0.0 if st == "ok" else 0.7, light=RED_LIGHT, light_amt=0.4, haze=HAZE, haze_amt=haze,
-                   bank=0.08 * math.sin(T + it["x0"]))
-        if it.get("pair"):                                    # a chaser on its tail, firing short bursts
-            other = "spitfire" if it["kind"] == "bf109" else "bf109"
-            back = -1 if not flip else 1
-            cx_, cy_ = x + back * it["size"] * 1.7, y + it["size"] * 0.12 * math.sin(T * 2 + it["x0"])
-            A.aircraft(ctx, other, cx_, cy_, it["size"] * 0.95, pitch=pitch, flip=flip, prop_t=T, light=RED_LIGHT,
-                       light_amt=0.4, haze=HAZE, haze_amt=haze)
-            if (T * 3 + it["x0"]) % 1 < 0.4:
-                for k in range(4):
-                    ph = (T * 7 + k / 4) % 1
-                    tx = cx_ - back * it["size"] * (0.5 + ph * 1.1)
-                    line(ctx, [(tx, cy_), (tx - back * it["size"] * 0.15, cy_)], "#ffe6a0", max(1.5, it["size"] * 0.01),
-                         0.9 * (1 - haze))
+        if st != "ok":
+            nose = P["size"] * 0.42
+            def emit(tau, P=P, f=f, c0=T - a):
+                q = f.pos(P, tau - c0)
+                if q is None:
+                    return None
+                vx, vy = f.vel(P, tau - c0)
+                n = math.hypot(vx, vy) or 1
+                return q[0] + vx / n * nose * 0.6, q[1] + vy / n * nose * 0.6       # engine, near the nose
+            fx.trail_smoke(ctx, emit, T, life={"smoking": 1.3, "burning": 1.7, "glide": 0.9}[st],
+                           dt=0.03, r0=P["size"] * 0.02, r1=P["size"] * {"smoking": 0.13, "burning": 0.2, "glide": 0.07}[st],
+                           dark=mix("#120505", HAZE, haze * 0.7), hot="#ffb048" if st == "burning" else None,
+                           fade_to=HAZE, a={"smoking": 0.35, "burning": 0.45, "glide": 0.22}[st] * (1 - haze * 0.5),
+                           rise=25, wind=(-20, 0), seed=f.seed * 31 + int(P["x0"]))
+        vx, vy = f.vel(P, a)
+        flip = vx < 0
+        pitch = -math.atan2(vy, abs(vx))
+        bank = 0.08 * math.sin(T + P["rs"] * 6)
+        if st == "burning":
+            bank = 0.5 * math.sin(a * P["roll"])
+        A.aircraft(ctx, P["kind"], p[0], p[1], P["size"], pitch=pitch, flip=flip, bank=bank,
+                   prop_t=0 if st == "glide" else T, damage=0.0 if st == "ok" else 0.7, light=RED_LIGHT,
+                   light_amt=0.4, haze=HAZE, haze_amt=haze)
+        if st == "burning":
+            nx, ny = vx / (math.hypot(vx, vy) or 1), vy / (math.hypot(vx, vy) or 1)
+            fx.flames(ctx, p[0] + nx * P["size"] * 0.25, p[1] + ny * P["size"] * 0.25 + 6, P["size"] * 0.1,
+                      P["size"] * 0.12, T, seed=int(P["x0"]) % 97, a=1 - haze * 0.6)
+        if P["chase"]:                                     # a chaser 0.45 s behind on the same curved path
+            q = f.pos(P, a - 0.45)
+            if q is not None:
+                cvx, cvy = f.vel(P, a - 0.45)
+                other = "spitfire" if P["kind"] != "spitfire" else "bf109"
+                cp = -math.atan2(cvy, abs(cvx))
+                A.aircraft(ctx, other, q[0], q[1], P["size"] * 0.95, pitch=cp, flip=cvx < 0, prop_t=T,
+                           light=RED_LIGHT, light_amt=0.4, haze=HAZE, haze_amt=haze)
+                if (T * 2.5 + P["rs"]) % 1 < 0.45:          # short bursts toward the target
+                    dx, dy = p[0] - q[0], p[1] - q[1]
+                    for k in range(4):
+                        ph = (T * 7 + k / 4) % 1
+                        tx, ty = q[0] + dx * ph, q[1] + dy * ph
+                        line(ctx, [(tx, ty), (tx + dx * 0.08, ty + dy * 0.08)], "#ffe6a0",
+                             max(1.5, P["size"] * 0.012), 0.9 * (1 - haze))
     if near:
-        # a big close pass every ~1.6 s: fills a third of the frame for a few frames, with speed streaks
+        # a big close pass every ~1.6 s, with speed streaks, flying where its nose points
         period = 1.6
         k = math.floor((T + seed * 0.37) / period)
         ph = ((T + seed * 0.37) / period) - k
@@ -255,13 +342,17 @@ def air_traffic(ctx, T, seed=0, density=1.0, near=True, far=True, mid=True, y_ba
             d = r2.choice((1, -1))
             kind = r2.choice(("spitfire", "bf109"))
             size = r2.uniform(900, 1300)
-            yy = r2.uniform(200, 850)
-            xx = (-size * 0.7 + q * (W + size * 1.4)) if d > 0 else (W + size * 0.7 - q * (W + size * 1.4))
+            climb = r2.uniform(-0.18, 0.18)
+            y0 = r2.uniform(250, 800)
+            travel = W + size * 1.4
+            xx = (-size * 0.7 + q * travel) if d > 0 else (W + size * 0.7 - q * travel)
+            yy = y0 - math.tan(climb) * (q - 0.5) * travel
             for j in range(6):
                 sy = yy + (j - 2.5) * size * 0.05
-                line(ctx, [(xx - d * size * 0.5, sy), (xx - d * size * (1.2 + 0.2 * j), sy)], "#ffd8b0", 3, 0.35)
-            A.aircraft(ctx, kind, xx, yy, size, pitch=r2.uniform(-0.1, 0.1), flip=d < 0, prop_t=T,
-                       light=RED_LIGHT, light_amt=0.5)
+                L_ = size * (0.7 + 0.2 * j)
+                line(ctx, [(xx - d * size * 0.5, sy + math.tan(climb) * size * 0.5),
+                           (xx - d * (size * 0.5 + L_), sy + math.tan(climb) * (size * 0.5 + L_))], "#ffd8b0", 3, 0.35)
+            A.aircraft(ctx, kind, xx, yy, size, pitch=climb, flip=d < 0, prop_t=T, light=RED_LIGHT, light_amt=0.5)
 
 
 # ================================================================== 1940 · BATTLE
@@ -425,10 +516,10 @@ def shot_chase(ctx, u, T, hit_wingman=0.0):
 def shot_attack(ctx, u, T):
     """Our pilot dives in from the side; the 109 breaks off trailing smoke."""
     battle_sky(ctx, T, scroll=u * 300, smoke=True, flak_n=5, seed=13)
-    A.aircraft(ctx, "bf109", 1100 + u * 250, 600 + u * 160, 280, pitch=-0.25 - u * 0.3, prop_t=T, damage=u,
-               light=RED_LIGHT, light_amt=0.45)
-    if u > 0.2:
-        fx.smoke(ctx, 1100 + u * 250 - 120, 620 + u * 160, 400, 30, "#1a0808", seed=90, t=T, a=0.7, lean=-1.2)
+    bx, by, bp = 1100 + u * 250, 600 + u * 160, -0.25 - u * 0.3
+    if u > 0.15:
+        streaming(ctx, T, (bx, by), bp, 700, nose=280 * 0.4, size=280, life=1.2, a=0.5, seed=90, fire=u > 0.4)
+    A.aircraft(ctx, "bf109", bx, by, 280, pitch=bp, prop_t=T, damage=u, light=RED_LIGHT, light_amt=0.45)
     A.aircraft(ctx, "spitfire", 380 + u * 380, 260 + u * 200, 330, pitch=-0.4, bank=-0.15, prop_t=T,
                light=RED_LIGHT, light_amt=0.45)
     fx.tracers(ctx, T, 93, n=8, x0=560 + u * 380, y0=360 + u * 200, ang=0.38, spread=20, speed=3000)
@@ -438,6 +529,9 @@ def shot_hit(ctx, u, T):
     """Tracers rake our own Spitfire: sparks, holes, a jolt."""
     battle_sky(ctx, T, scroll=u * 200, smoke=True, flak_n=6, seed=15, traffic=0.6)
     jolt = 14 * math.exp(-u * 6) * math.sin(T * 60)
+    if u > 0.2:
+        streaming(ctx, T, (960, 540), 0.05 + 0.1 * u, 900, nose=520 * 0.42, size=520, life=0.9,
+                  a=0.35 * min(1, (u - 0.2) * 4), seed=91)
     A.aircraft(ctx, "spitfire", 960 + jolt, 540, 520, pitch=0.05 + 0.1 * u, prop_t=T, damage=min(1.0, u * 2),
                light=RED_LIGHT, light_amt=0.45)
     for k in range(9):
@@ -461,31 +555,34 @@ def shot_falling(ctx, u, T):
     L.rolling_field(ctx, horizon, 20, mix(KENT["far"], "#8a3a30", redness), seed=1, freq=0.5)
     L.rolling_field(ctx, horizon + 80, 16, mix(KENT["fields"], "#6a2820", redness), seed=2, freq=0.8)
     L.oast_house(ctx, 1300, horizon + 92, 70 + u * 60, mix(KENT["oast"], "#4a1c18", redness), cowl="#e8dcc6", t=T)
-    L.hedgerow(ctx, horizon + 150, -300, W + 300, mix(KENT["hedge"], "#3a1414", redness), seed=3, h=30)
+    L.rolling_field(ctx, horizon + 150, 6, mix(KENT["hedge"], "#3a1414", redness), seed=3, freq=3.0)
+    L.rolling_field(ctx, horizon + 175, 8, mix(KENT["fields"], "#5a2420", redness), seed=13, freq=0.9)
     L.rolling_field(ctx, horizon + 260, 12, mix("#6f6440", "#3a1614", redness), seed=4)
     L.field_stripes(ctx, horizon + 260, H + 300, "#3e3824", a=0.3)
-    fx.smoke(ctx, 520, horizon + 300, 420, 30, "#1a0a0a", seed=98, t=T, a=0.6, lean=0.3)      # a wreck burning
-    fx.flames(ctx, 520, horizon + 300, 40, 40, T, seed=99)
+    fx.smoke(ctx, 1650, horizon + 330, 320, 22, "#2a1210", seed=98, t=T, a=0.4, lean=0.3, rise=30)  # a wreck burning
+    fx.flames(ctx, 1650, horizon + 330, 30, 30, T, seed=99)
     gx, gy = 1500 - u * 500, horizon + 120 + u * 80                                           # a 109 gliding in
-    smoke_trail(ctx, [(gx + 40 + k * 22, gy - 12 - k * 6) for k in range(18)], 6, 22, "#2a1010", a=0.5, T=T)
+    streaming(ctx, T, (gx, gy), -0.2, 260, nose=60, size=150, life=0.6, a=0.3, seed=92, flip=True)
     A.aircraft(ctx, "bf109", gx, gy, 150, pitch=-0.2, flip=True, prop_t=0, damage=0.6, light=RED_LIGHT,
                light_amt=0.3 * redness, haze=HAZE, haze_amt=0.25)
     ctx.restore()
-    ang = -0.5 - 0.1 * u
-    x, y = 900 + 30 * math.sin(T * 3), 480
-    fx.smoke(ctx, x - 60, y - 20, 700, 34, "#140606", seed=95, t=T, a=0.8, lean=-1.5)
-    A.aircraft(ctx, "spitfire", x, y, 380, pitch=ang, bank=0.2, prop_t=T * 0.4, damage=1.0,
+    ang = -0.5 - 0.1 * u + 0.05 * math.sin(T * 2.1)
+    x, y = 900 + 30 * math.sin(T * 3), 480 + 12 * math.sin(T * 1.7)
+    ex, ey = streaming(ctx, T, (x, y), ang, 1100, nose=380 * 0.42, size=380, life=1.3, a=0.85, seed=95, fire=True)
+    A.aircraft(ctx, "spitfire", x, y, 380, pitch=ang, bank=0.08 + 0.06 * math.sin(T * 5), prop_t=T * 0.4, damage=1.0,
                light=RED_LIGHT, light_amt=0.35 * redness)
-    fx.flames(ctx, x + 80, y + 50, 60, 70, T, seed=96)
+    fx.flames(ctx, ex, ey + 12, 48, 64, T, seed=96)
 
 
 def shot_tree(ctx, u, T):
     """Skimming low over the great oak - the same tree from the opening."""
     redness = 0.45
     kent_background(ctx, 900 + u * 900, T, redness=redness)
-    fx.smoke(ctx, 640 + u * 300, 250 + u * 90, 600, 30, "#1a0808", seed=97, t=T, a=0.75, lean=-1.6)
-    A.aircraft(ctx, "spitfire", 720 + u * 300, 250 + u * 90, 360, pitch=-0.12, prop_t=T * 0.3, damage=1.0,
+    px, py = 720 + u * 300, 250 + u * 90
+    ex, ey = streaming(ctx, T, (px, py), -0.12, 1100, nose=360 * 0.42, size=360, life=1.3, a=0.85, seed=97, fire=True)
+    A.aircraft(ctx, "spitfire", px, py, 360, pitch=-0.12, prop_t=T * 0.3, damage=1.0,
                light=RED_LIGHT, light_amt=0.25)
+    fx.flames(ctx, ex, ey + 10, 44, 58, T, seed=98)
     L.oak_tree(ctx, 1250 - u * 1300, 1750, 1100, mix(KENT["oak"], "#140808", redness), seed=7, t=T, wind=3.0)
 
 
@@ -515,7 +612,8 @@ def shot_ending_grass(ctx, u, T, pick=0.0):
         A.paper_plane(ctx, px, py, 170, pitch=-0.06)
         if pick > 0.05:
             q = (pick - 0.05) / 0.25
-            child(ctx, -100 + q * 960, gy, 520, T / 0.36, run=1.0)
+            ph = q * 960 / run_travel(1.0, 520)            # phase from distance -> planted feet
+            child(ctx, -100 + run_travel(ph, 520), gy, 520, ph, run=1.0)
     elif pick < 0.6:                                 # bending down
         q = ease((pick - 0.3) / 0.3)
         r = child(ctx, 860, gy, 520, 0.0, reach=q)

@@ -46,21 +46,57 @@ def lin(t, t0, t1):
 PLANE = dict(plane_xy=(820, 560), size=260, pitch=0.38)
 
 
+from silhouette_kit.child import run_travel
+RUN_H = 250
+RUN_PERIOD = 4.6 / (2000 / run_travel(1.0, RUN_H))          # stride time so he covers 2000 px in 4.6 s
+
+
 def run_shot(ctx, t):
-    xw = -120 + 2000 * (t / 4.6) ** 0.92
+    ph = t / RUN_PERIOD
+    xw = -120 + run_travel(ph, RUN_H)                          # feet planted: position follows the stance foot
     pan = 700 * ease((t - 0.8) / 3.8)
-    S.shot_kent_run(ctx, t / 4.6, t, boy_x=xw, pan=pan)
+    S.shot_kent_run(ctx, t / 4.6, t, boy_x=xw, pan=pan, phase=ph)
+
+
+def throw_pan(t):
+    q = lin(t, 5.25, 5.71)
+    return 700 + 260 * q * q                                   # accelerates into the follow shot
 
 
 def throw_shot(ctx, t):
     k = 0.5 * lin(t, 4.6, 5.34) if t < 5.34 else 0.5 + 0.5 * lin(t, 5.34, 5.71)
     fly = lin(t, 5.34, 5.71)
-    S.shot_kent_throw(ctx, 0, t, pan=700 + 260 * ease((t - 5.25) / 0.46), k=k, fly=fly)
+    return S.shot_kent_throw(ctx, 0, t, pan=throw_pan(t), k=k, fly=fly)
+
+
+V_PAN = 2 * 260 / 0.46                                         # pan speed at the end of the throw
+
+
+def follow_pan(t):
+    tau = max(0.0, t - 5.71)
+    return 960 + 300 * tau + (V_PAN - 300) * 0.6 * (1 - math.exp(-tau / 0.6))
+
+
+_THROW_END = None
+
+
+def throw_end_pose():
+    """Where the paper plane is on the last frame of the throw (so the follow shot can pick it up there)."""
+    global _THROW_END
+    if _THROW_END is None:
+        s, ctx = new_canvas()
+        _THROW_END = throw_shot(ctx, 5.71 - 1e-6)
+    return _THROW_END
 
 
 def follow_shot(ctx, t):
     u = lin(t, 5.71, DROP)
-    S.shot_follow_plane(ctx, u, t, redness=ease((t - 7.0) / 6.0), drop=1100 * ease((t - 5.71) / 5.0), **PLANE)
+    x0, y0, s0, p0 = throw_end_pose()
+    q = ease(lin(t, 5.71, 6.5))                                 # camera catches up with the plane
+    xy = (x0 + (PLANE["plane_xy"][0] - x0) * q, y0 + (PLANE["plane_xy"][1] - y0) * q)
+    S.shot_follow_plane(ctx, u, t, redness=ease((t - 7.0) / 6.0), drop=1100 * ease((t - 5.71) / 5.0),
+                        plane_xy=xy, size=s0 + (PLANE["size"] - s0) * q, pitch=p0 + (PLANE["pitch"] - p0) * q,
+                        pan=follow_pan(t))
 
 
 def cut_shot(ctx, t):
@@ -128,6 +164,9 @@ TL = [
 # impacts: (time, strength, flash colour or None)
 IMPACTS = [(DROP, 1.8, "#ffffff"), (beat(17), 2.0, "#ff5a30"), (END, 1.2, "#fff4e0"), (5.34, 0.25, None),
            (10.86, 0.35, None), (11.36, 0.25, None)]
+for t_, st_ in ((8.4, 0.18), (9.9, 0.18), (11.2, 0.3), (11.86, 0.25), (12.2, 0.3), (12.37, 0.3), (12.85, 0.4),
+                (13.22, 0.5)):                              # turbulence jolts as clouds whip past before the drop
+    IMPACTS.append((t_, st_, None))
 for s_ in TL[4:-1]:                                          # every climax cut
     if s_[0] not in (beat(17),):
         IMPACTS.append((s_[0], 0.55, None))
@@ -155,6 +194,8 @@ def camera(t, i):
     roll = r0 + (r1 - r0) * u
     cx, cy = cam.get("center", (W / 2, H / 2))
     amp = cam.get("shake", 0.0)
+    if 11.0 < t < DROP:                                      # buffeting builds toward the transformation
+        amp += 9.0 * ((t - 11.0) / (DROP - 11.0)) ** 1.5
     flash, fcol, chroma = 0.0, None, 0.0
     for ti, st, col in IMPACTS:
         dt = t - ti

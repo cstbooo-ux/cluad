@@ -40,6 +40,66 @@ UPPER = [(0, 0.04, 0.042), (0.5, 0.035, 0.035), (0.64, 0.035, 0.035), (0.7, 0.03
 FORE = [(0, 0.023, 0.023), (0.55, 0.021, 0.02), (0.9, 0.016, 0.016), (1.0, 0.017, 0.017)]
 
 
+# run cycle keys for ONE leg, p = 0 at its heel strike: (p, thigh, knee flex, foot pitch)
+RUN_KEYS = [(0.00, 0.44, 0.22, -0.15), (0.12, 0.18, 0.62, 0.0), (0.25, -0.18, 0.38, 0.15), (0.38, -0.52, 0.42, 0.9),
+            (0.50, -0.36, 1.55, 0.8), (0.65, 0.22, 1.95, 0.4), (0.80, 0.85, 1.25, 0.05), (0.92, 0.66, 0.45, -0.2),
+            (1.00, 0.44, 0.22, -0.15)]
+STANCE = 0.38            # fraction of the stride a foot is on the ground (the rest is swing, with a short flight)
+
+
+def _key(p):
+    p %= 1.0
+    for (p0, a0, b0, c0), (p1, a1, b1, c1) in zip(RUN_KEYS[:-1], RUN_KEYS[1:]):
+        if p0 <= p <= p1:
+            q = (p - p0) / (p1 - p0)
+            q = q * q * (3 - 2 * q)
+            return a0 + (a1 - a0) * q, b0 + (b1 - b0) * q, c0 + (c1 - c0) * q
+    return RUN_KEYS[0][1:]
+
+
+def _run_leg(p, u, lean):
+    """thigh, shin angles and foot pitch for leg phase p, plus ankle (x, y) relative to the hip."""
+    th, fl, pitch = _key(p)
+    th += lean * 0.25
+    sh = th - fl
+    L1, L2 = 0.215 * u, 0.205 * u
+    ax = L1 * math.sin(th) + L2 * math.sin(sh)
+    ay = L1 * math.cos(th) + L2 * math.cos(sh)
+    return th, sh, pitch, ax, ay
+
+
+def run_hip_height(phase, u, lean=0.22):
+    """Hip height above the ground (px): locked to the stance foot, with a small arc during the flight."""
+    def stance_h(p):
+        _, _, _, _, ay = _run_leg(p, u, lean)
+        return ay + 0.032 * u
+    for off in (0.0, 0.5):
+        p = (phase + off) % 1.0 if off == 0.0 else (phase + 0.5) % 1.0
+        if p <= STANCE:
+            return stance_h(p)
+    p = phase % 1.0
+    p = p if p < 0.5 else p - 0.5                                    # flight between the two stances
+    q = (p - STANCE) / (0.5 - STANCE)
+    return stance_h(STANCE) * (1 - q) + stance_h(0.0) * q + 0.045 * u * math.sin(math.pi * q)
+
+
+def run_travel(phase, u, lean=0.22):
+    """Ground distance covered at `phase` (cumulative, px): feet stay planted during stance."""
+    x_c = _run_leg(0.0, u, lean)[3]
+    x_o = _run_leg(STANCE, u, lean)[3]
+    stance_d = x_c - x_o
+    flight_d = stance_d / STANCE * (0.5 - STANCE)
+    step = stance_d + flight_d
+    k = math.floor(phase * 2)
+    p = phase * 2 - k                                                 # 0..1 within one step
+    ps = p * 0.5
+    if ps <= STANCE:
+        d = x_c - _run_leg(ps, u, lean)[3]
+    else:
+        d = stance_d + flight_d * (ps - STANCE) / (0.5 - STANCE)
+    return k * step + d
+
+
 def _rgb(c):
     c = c.lstrip("#")
     return tuple(int(c[i:i + 2], 16) / 255 for i in (0, 2, 4))
@@ -52,7 +112,7 @@ def child(ctx, x, gy, h, phase, run=1.0, throw=None, c="#000000", reach=None, lo
     dot = lambda p, r: shapes.append(("c", p[0], p[1], r))
     L1, L2 = 0.215 * u, 0.205 * u
     A = 0.36 + 0.3 * run
-    lean = 0.05 + 0.2 * run
+    lean = 0.05 + 0.17 * run + 0.03 * run * math.sin(TAU * (phase * 2 - 0.1))
     if throw is not None:                         # plant the feet and rock the body for the throw
         k = throw
         lean = -0.12 + 0.5 * max(0.0, min(1.0, (k - 0.3) / 0.4)) if k < 0.7 else 0.38 - 0.1 * (k - 0.7)
@@ -70,13 +130,13 @@ def child(ctx, x, gy, h, phase, run=1.0, throw=None, c="#000000", reach=None, lo
             thigh = (0.25 + 0.55 * reach if s == 0 else -0.15 + 0.35 * reach)
             flex = 0.1 + (1.0 * reach if s == 0 else 0.7 * reach)
         elif throw is None:
-            thigh = A * sn + lean * 0.3
-            flex = 0.08 + (0.9 + 0.9 * run) * max(0.0, math.cos(ph - 0.5)) ** 2
+            thigh, shin_a, pitch_r, _, _ = _run_leg(phase + s * 0.5, u, lean)
+            flex = thigh - shin_a
         else:                                      # stride stance: front leg forward, back leg behind
             thigh = (0.32 if s == 0 else -0.3) + lean * 0.2
             flex = 0.1 if s == 0 else 0.35
         shin = thigh - flex
-        pitch = 0.5 * max(0.0, -sn) ** 3 if throw is None else (0.0 if s == 0 else 0.5)
+        pitch = pitch_r if (throw is None and reach is None) else (0.0 if s == 0 else 0.5)
         if reach is not None:
             pitch = 0.0 if s == 0 else 0.3 * reach
         knee = bone_pt(hip, thigh, L1, 0); ankle = bone_pt(knee, shin, L2, 0)
@@ -90,7 +150,9 @@ def child(ctx, x, gy, h, phase, run=1.0, throw=None, c="#000000", reach=None, lo
         shoe_pts += sp
         add(sp)
     ground = max(p[1] for p in shoe_pts)
-    bob = 0.01 * u * abs(math.sin(TAU * phase * 2)) * run if throw is None else 0.0
+    if throw is None and reach is None:                        # locked to the stance foot, arc in flight
+        ground = max(run_hip_height(phase, u, lean), ground)
+    bob = 0.0
     T = Frame(hip[0], hip[1] - bob, lean, u)
     # shirt + shorts waist
     add(T.pts([(-0.075, 0.25, C), (-0.03, 0.27), (0.03, 0.265), (0.07, 0.24, C), (0.08, 0.14), (0.075, 0.04),
@@ -99,6 +161,8 @@ def child(ctx, x, gy, h, phase, run=1.0, throw=None, c="#000000", reach=None, lo
     hc = T(0.025 + 0.04 * lean, 0.34)
     HH = 0.17 * u
     nod = lean * 0.5 - look_up * 0.55
+    if throw is None and reach is None:
+        nod += 0.06 * math.sin(TAU * (phase * 2 - 0.2))                # head lags the body a little
     Hf = Frame(hc[0], hc[1], nod, HH)
     hp = lambda lst: Hf.pts([(p[0], -p[1]) + tuple(p[2:]) for p in lst])
     add([T(-0.03, 0.24), Hf(-0.3, -0.25), Hf(0.1, -0.42), Hf(0.15, -0.5), T(0.035, 0.25)])
@@ -117,21 +181,22 @@ def child(ctx, x, gy, h, phase, run=1.0, throw=None, c="#000000", reach=None, lo
         add([bone_pt(wrist, fore_ang, p[0] * u, p[1] * u) + tuple(p[2:]) for p in hand])
         return wrist
 
-    far_ph = TAU * phase + math.pi / 2
-    swing = 0.35 + 0.45 * run
-    bend = 0.5 + 0.9 * run
-    a_up = -swing * math.sin(far_ph) + lean * 0.4
-    el = bone_pt(shoulder, a_up, La, 0)
-    arm(el, a_up + bend + 0.2 * max(0.0, math.sin(far_ph)))
+    def run_arm(q):
+        """q = 0 when the same-side leg strikes (arm back)."""
+        cq = math.cos(TAU * q)
+        a_up = -0.72 * cq + lean * 0.3
+        fore = a_up + 1.25 + 0.45 * max(0.0, -cq)
+        return bone_pt(shoulder, a_up, La, 0), fore
+
+    far_q = phase + 0.5                                      # far arm pairs with the far (s=1) leg
+    el, fa = run_arm(far_q)
+    arm(el, fa)
     if reach is not None:
         a_up = 0.25 + 0.6 * reach if not hold else 0.5
         el = bone_pt(shoulder, a_up, La, 0)
         fore = a_up + (0.15 if not hold else 1.3)
     elif throw is None:
-        near_ph = far_ph + math.pi
-        a_up = -swing * math.sin(near_ph) + lean * 0.4
-        el = bone_pt(shoulder, a_up, La, 0)
-        fore = a_up + bend + 0.2 * max(0.0, math.sin(near_ph))
+        el, fore = run_arm(phase)
     else:
         k = throw
         # keyed arm angles (0 = down, + forward): wind-up behind the head -> release up/forward -> follow down

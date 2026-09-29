@@ -249,3 +249,54 @@ def heat_shimmer(img, t, y0, y1, amp=2.5):
         if s:
             out[y:y + 2] = np.roll(img[y:y + 2], s, axis=1)
     return out
+
+
+def trail_smoke(ctx, pos_at, T, life=1.6, dt=0.03, r0=4.0, r1=40.0, dark="#140606", hot=None, fade_to=None,
+                a=0.55, rise=40.0, wind=(-30.0, 0.0), seed=0, turbulence=10.0):
+    """Dynamic smoke trail from a moving source.
+
+    pos_at(tau) -> (x, y) or None : where the source was at time tau (same screen coords as now).
+    Puffs are emitted on a fixed time grid (so they never shimmer), then each one grows, rises, drifts with the
+    wind, wobbles and fades out over `life` seconds. hot = colour of fresh puffs next to a fire."""
+    dark_c = hx(dark)
+    hot_c = hx(hot) if hot else None
+    fade_c = hx(fade_to) if fade_to else None
+    k0 = math.floor(T / dt)
+    n = int(life / dt)
+    bands = 5
+    groups = [[] for _ in range(bands)]
+    for k in range(n, -1, -1):                              # oldest first
+        e = (k0 - k) * dt
+        age = T - e
+        if age < 0 or age > life:
+            continue
+        p = pos_at(e)
+        if p is None:
+            continue
+        q = age / life
+        rnd = random.Random(seed * 1000003 + (k0 - k))
+        wob = turbulence * (0.3 + q)
+        x = p[0] + wind[0] * age + wob * math.sin(age * rnd.uniform(2, 5) + rnd.uniform(0, 6.28)) + rnd.uniform(-3, 3)
+        y = p[1] + wind[1] * age - rise * age * (0.6 + 0.8 * q) + wob * 0.5 * math.cos(age * 3 + rnd.uniform(0, 6.28))
+        r = (r0 + (r1 - r0) * q ** 0.55) * rnd.uniform(0.7, 1.25)
+        side = rnd.uniform(-0.35, 0.35) * r
+        x += side
+        y -= abs(side) * 0.5
+        c = dark_c
+        if hot_c and age < 0.18:
+            c = tuple(h + (d - h) * (age / 0.18) for h, d in zip(hot_c, dark_c))
+        if fade_c:
+            c = tuple(d + (f - d) * min(1.0, q * 0.9) for d, f in zip(c, fade_c))
+        b = min(bands - 1, int(q * bands))
+        groups[b].append((x, y, r, c, rnd.random()))
+    # each age band is merged into one opaque mass, then faded as a whole -> continuous, soft-tailed smoke
+    for b in range(bands - 1, -1, -1):
+        if not groups[b]:
+            continue
+        ctx.push_group()
+        for x, y, r, c, rr in groups[b]:
+            circle(ctx, x, y, r, c)
+            if rr < 0.4:
+                circle(ctx, x + r * 0.6, y - r * 0.45, r * 0.55, c)
+        ctx.pop_group_to_source()
+        ctx.paint_with_alpha(a * (1 - (b + 0.5) / bands) ** 1.2)

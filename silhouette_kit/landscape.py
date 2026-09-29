@@ -72,10 +72,12 @@ def hedgerow(ctx, y, x0, x1, c, seed, h=40, a=1.0, trees=True):
     rnd = random.Random(seed)
     _grp(ctx)
     x = x0
-    while x < x1:
-        r = rnd.uniform(0.5, 1.0) * h
-        circle(ctx, x, y - r * 0.5, r, c)
-        x += r * rnd.uniform(0.8, 1.3)
+    while x < x1:                                        # lumpy, overlapping bushes (not a string of beads)
+        r = rnd.uniform(0.35, 1.05) * h
+        circle(ctx, x, y - r * rnd.uniform(0.3, 0.7), r, c)
+        if rnd.random() < 0.5:
+            circle(ctx, x + r * 0.4, y - r * rnd.uniform(0.6, 1.1), r * rnd.uniform(0.4, 0.7), c)
+        x += r * rnd.uniform(0.45, 0.85)
     rect(ctx, x0 - h, y - h * 0.3, x1 - x0 + 2 * h, h * 0.3 + 4, c)
     if trees:                                            # standard trees poking out of the hedge
         x = x0 + rnd.uniform(100, 400)
