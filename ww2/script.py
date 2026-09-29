@@ -56,9 +56,9 @@ SEGMENTS = [
          text="Britain stands alone.|Night after night, the bombers come.",
          zh="英国孤军奋战。|一夜又一夜，轰炸机如期而至。"),
     dict(id="barbarossa", st="moskva", lang="ru", y=1941, m=6,
-         text="Внимание, говорит Москва!|Двадцать второго июня, в четыре часа утра,|"
-              "без объявления войны, германские войска напали на Советский Союз.",
-         zh="注意，这里是莫斯科！|6月22日凌晨4点，|德军不宣而战，进攻苏联。"),
+         text="Внимание, говорит Москва!|Двадцать второго июня, без объявления войны,|"
+              "германские войска напали на Советский Союз.",
+         zh="注意，这里是莫斯科！|6月22日，德军不宣而战，|进攻苏联。"),
     dict(id="pearl", st="washington", lang="us", y=1941, m=12,
          text="Sunday morning, December seventh.|Japanese planes strike Pearl Harbor.",
          zh="12月7日，星期天早晨。|日本飞机突袭珍珠港。",
@@ -103,4 +103,4 @@ CARDS = {
     "title": ("从莱茵兰到长崎", "1936 — 1945"),
 }
 
-RATE = "+8%"
+RATE = "+12%"
