@@ -11,8 +11,12 @@ FIG_H = 430       # main figure height
 
 # ---------------------------------------------------------------- colour helpers
 def hx(s, a=None):
-    s = s.lstrip("#")
-    c = tuple(int(s[i:i + 2], 16) / 255 for i in (0, 2, 4))
+    """'#rrggbb' (or an rgb tuple) -> (r, g, b[, a]) floats."""
+    if not isinstance(s, str):
+        c = tuple(s)[:3]
+    else:
+        s = s.lstrip("#")
+        c = tuple(int(s[i:i + 2], 16) / 255 for i in (0, 2, 4))
     return c if a is None else c + (a,)
 
 

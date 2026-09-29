@@ -32,35 +32,42 @@ def _rgb(c):
     return tuple(int(c[i:i + 2], 16) / 255 for i in (0, 2, 4))
 
 
-def pilot_profile(ctx, x, y, s, c="#000000", nod=0.0, jaw=0.0, rim=None, rim_w=0.0, lens="#8a3a30"):
-    """Head-and-shoulders profile. jaw: 0..1 clench (pulls the mouth line in slightly).
-    rim: optional rim-light colour traced along the face edge (e.g. red sky light)."""
-    col = _rgb(c)
+def pilot_profile(ctx, x, y, s, c="#000000", nod=0.0, jaw=0.0, rim=None, rim_w=0.0, lens="#8a3a30",
+                  helmet="#2b1c14", collar="#3a2c22", fleece="#6a5846", jacket="#1d1511", mae_west="#3a3020"):
+    """Head-and-shoulders profile. jaw: 0..1 clench. Materials are dark tints (leather helmet, sheepskin
+    collar, jacket, life-vest) so the shapes separate while still reading as a silhouette.
+    rim: optional rim-light colour traced along the face / helmet / shoulder edge."""
     F = Frame(x, y, nod, s)
     pts = lambda lst: F.pts([(p[0], -p[1]) + tuple(p[2:]) for p in lst])
     head = HEAD
     if jaw:
         head = [(p[0] - (0.02 * jaw if 0.2 < p[1] < 0.36 else 0.0), p[1]) + tuple(p[2:]) for p in HEAD]
-    ctx.set_source_rgb(*col)
-    for shape in (BODY, COLLAR, MAE_WEST, head, HELMET, EAR_CUP, GOGGLE_STRAP, GOGGLE, CHIN_STRAP):
-        smooth_path(ctx, pts(shape)); ctx.fill()
-    if lens:                                            # tinted lens reflecting the sky
-        smooth_path(ctx, pts(GOGGLE_LENS)); ctx.set_source_rgba(*_rgb(lens), 0.85); ctx.fill()
-        ctx.set_source_rgb(*col)
-    # neck
+    layers = ((BODY, jacket), (MAE_WEST, mae_west), (COLLAR, collar), (head, c), (HELMET, helmet),
+              (EAR_CUP, helmet), (GOGGLE_STRAP, "#1a120c"), (GOGGLE, "#141010"), (CHIN_STRAP, "#1a120c"))
+    for shape, col in layers:
+        smooth_path(ctx, pts(shape)); ctx.set_source_rgb(*_rgb(col)); ctx.fill()
     smooth_path(ctx, pts([(-0.36, 0.3), (-0.2, 0.45), (0.1, 0.55), (0.18, 0.5), (0.12, 0.42), (-0.1, 0.36)]))
-    ctx.fill()
+    ctx.set_source_rgb(*_rgb(c)); ctx.fill()
+    # fleece edge on the collar
+    ctx.new_path(); smooth_path(ctx, pts([(-0.62, 0.3), (-0.4, 0.42), (-0.1, 0.52), (0.12, 0.58), (0.3, 0.66),
+                                          (0.38, 0.8)]), closed=False)
+    ctx.set_line_width(s * 0.03); ctx.set_source_rgba(*_rgb(fleece), 0.9); ctx.stroke()
+    if lens:                                            # tinted lens reflecting the sky
+        smooth_path(ctx, pts(GOGGLE_LENS)); ctx.set_source_rgba(*_rgb(lens), 0.9); ctx.fill()
     if rim:
         rc = _rgb(rim)
-        edge = [p for p in head if p[0] > 0.3 and -0.25 < p[1] < 0.52]
-        ctx.new_path()
-        smooth_path(ctx, pts(edge), closed=False)
-        ctx.set_line_width(max(1.5, s * 0.012 * (1 + rim_w))); ctx.set_source_rgba(*rc, 0.8); ctx.stroke()
+        for shape, sel, w in ((head, lambda p: p[0] > 0.3 and -0.1 < p[1] < 0.52, 1.0),
+                              (HELMET, lambda p: p[1] < -0.2 and p[0] > -0.3, 1.2),
+                              (BODY, lambda p: p[0] > 0.3, 1.6)):
+            edge = [p for p in shape if sel(p)]
+            if len(edge) > 1:
+                ctx.new_path(); smooth_path(ctx, pts(edge), closed=False)
+                ctx.set_line_width(max(1.5, s * 0.012 * w * (1 + rim_w))); ctx.set_source_rgba(*rc, 0.75); ctx.stroke()
         gx, gy_ = F(0.43, 0.09)                          # goggle glint
-        ctx.new_path(); ctx.arc(gx, gy_, s * 0.012, 0, TAU); ctx.set_source_rgba(*rc, 0.95); ctx.fill()
+        ctx.new_path(); ctx.arc(gx, gy_, s * 0.014, 0, TAU); ctx.set_source_rgba(*rc, 0.95); ctx.fill()
 
 
-def spade_grip(ctx, x, y, s, c="#000000", squeeze=0.0, glove=None, button=None):
+def spade_grip(ctx, x, y, s, c="#000000", squeeze=0.0, glove="#2a1c14", button=None, rim=None):
     """Spitfire spade grip (ring) with a gloved right hand gripping its side, thumb on the gun button.
     squeeze 0..1 tightens the fist; button = colour for the brass firing button (None = silhouette)."""
     col = _rgb(c)
@@ -95,5 +102,11 @@ def spade_grip(ctx, x, y, s, c="#000000", squeeze=0.0, glove=None, button=None):
     # gauntlet + sleeve going out of frame to the lower right
     cuff = [(x + r * 1.5, y - r * 0.7), (x + r * 2.4, y - r * 0.3), (x + r * 3.8, y + r * 1.4), (x + r * 3.4, y + r * 2.7),
             (x + r * 2.0, y + r * 1.9), (x + r * 1.4, y + r * 0.9)]
-    ctx.set_source_rgb(*col)
+    ctx.set_source_rgb(*gc)
     smooth_path(ctx, cuff); ctx.fill()
+    if rim:                                                # light catching the top of the glove
+        ctx.new_path()
+        ctx.move_to(x - r * 0.12, y - r * 1.2)
+        ctx.curve_to(x + r * 0.6, y - r * 1.45, x + r * 1.4, y - r * 1.1, x + r * 2.4, y - r * 0.35)
+        ctx.line_to(x + r * 3.8, y + r * 1.35)
+        ctx.set_line_width(max(2.0, r * 0.06)); ctx.set_source_rgba(*_rgb(rim), 0.7); ctx.stroke()

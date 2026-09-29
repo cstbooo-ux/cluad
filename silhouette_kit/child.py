@@ -45,7 +45,7 @@ def _rgb(c):
     return tuple(int(c[i:i + 2], 16) / 255 for i in (0, 2, 4))
 
 
-def child(ctx, x, gy, h, phase, run=1.0, throw=None, c="#000000"):
+def child(ctx, x, gy, h, phase, run=1.0, throw=None, c="#000000", reach=None, look_up=0.0, hold=False):
     u = h
     shapes = []
     add = lambda pts: shapes.append(("p", pts))
@@ -57,12 +57,19 @@ def child(ctx, x, gy, h, phase, run=1.0, throw=None, c="#000000"):
         k = throw
         lean = -0.12 + 0.5 * max(0.0, min(1.0, (k - 0.3) / 0.4)) if k < 0.7 else 0.38 - 0.1 * (k - 0.7)
         A = 0.28
+    if reach is not None:                         # bend down to pick something up (0 standing .. 1 fully bent)
+        lean = 0.1 + 0.95 * reach
+        A = 0.2
+        run = 0.0
     hip = (x, 0.0)
     legs = []
     for s in (0, 1):
         ph = TAU * phase + s * math.pi + math.pi / 2
         sn = math.sin(ph)
-        if throw is None:
+        if reach is not None:
+            thigh = (0.25 + 0.55 * reach if s == 0 else -0.15 + 0.35 * reach)
+            flex = 0.1 + (1.0 * reach if s == 0 else 0.7 * reach)
+        elif throw is None:
             thigh = A * sn + lean * 0.3
             flex = 0.08 + (0.9 + 0.9 * run) * max(0.0, math.cos(ph - 0.5)) ** 2
         else:                                      # stride stance: front leg forward, back leg behind
@@ -70,6 +77,8 @@ def child(ctx, x, gy, h, phase, run=1.0, throw=None, c="#000000"):
             flex = 0.1 if s == 0 else 0.35
         shin = thigh - flex
         pitch = 0.5 * max(0.0, -sn) ** 3 if throw is None else (0.0 if s == 0 else 0.5)
+        if reach is not None:
+            pitch = 0.0 if s == 0 else 0.3 * reach
         knee = bone_pt(hip, thigh, L1, 0); ankle = bone_pt(knee, shin, L2, 0)
         legs.append((thigh, shin, knee, ankle, pitch))
     shoe_pts = []
@@ -89,7 +98,7 @@ def child(ctx, x, gy, h, phase, run=1.0, throw=None, c="#000000"):
     # head, neck, cap
     hc = T(0.025 + 0.04 * lean, 0.34)
     HH = 0.17 * u
-    nod = lean * 0.5
+    nod = lean * 0.5 - look_up * 0.55
     Hf = Frame(hc[0], hc[1], nod, HH)
     hp = lambda lst: Hf.pts([(p[0], -p[1]) + tuple(p[2:]) for p in lst])
     add([T(-0.03, 0.24), Hf(-0.3, -0.25), Hf(0.1, -0.42), Hf(0.15, -0.5), T(0.035, 0.25)])
@@ -114,7 +123,11 @@ def child(ctx, x, gy, h, phase, run=1.0, throw=None, c="#000000"):
     a_up = -swing * math.sin(far_ph) + lean * 0.4
     el = bone_pt(shoulder, a_up, La, 0)
     arm(el, a_up + bend + 0.2 * max(0.0, math.sin(far_ph)))
-    if throw is None:
+    if reach is not None:
+        a_up = 0.25 + 0.6 * reach if not hold else 0.5
+        el = bone_pt(shoulder, a_up, La, 0)
+        fore = a_up + (0.15 if not hold else 1.3)
+    elif throw is None:
         near_ph = far_ph + math.pi
         a_up = -swing * math.sin(near_ph) + lean * 0.4
         el = bone_pt(shoulder, a_up, La, 0)
@@ -134,6 +147,8 @@ def child(ctx, x, gy, h, phase, run=1.0, throw=None, c="#000000"):
                 break
         el = bone_pt(shoulder, a_up, La, 0)
     shape = HAND_FIST if throw is None else (HAND_PINCH if throw < 0.5 else HAND_OPEN)
+    if reach is not None:
+        shape = HAND_PINCH if hold else HAND_OPEN
     wrist = arm(el, fore, shape)
     hand = bone_pt(wrist, fore, 0.066 * u, 0.012 * u)
 
