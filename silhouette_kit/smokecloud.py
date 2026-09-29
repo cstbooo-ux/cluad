@@ -137,7 +137,7 @@ def cloud(ctx, x, base_y, width, tones, seed, T=0.0, a=1.0, tower=0.5, churn=1.0
     """Draw one particle cloud centred on x with its underside around base_y, `width` px wide.
     churn scales how fast the puffs billow (0 = frozen)."""
     tex = _textures()
-    count = int(max(40, min(260, width * 0.26 * detail)))
+    count = int(max(30, min(200, width * 0.17 * detail)))
     key = (seed, round(tower, 1), count)
     if key not in _CLOUDS:
         if len(_CLOUDS) > 400:
@@ -168,3 +168,61 @@ def cloud(ctx, x, base_y, width, tones, seed, T=0.0, a=1.0, tower=0.5, churn=1.0
         ctx.set_source_rgba(c1[0], c1[1], c1[2], al * (0.25 + 0.55 * lv))
         ctx.mask_surface(Lm, 0, 0)
         ctx.restore()
+
+
+def _smoothstep(e0, e1, x):
+    t = np.clip((x - e0) / (e1 - e0), 0, 1)
+    return t * t * (3 - 2 * t)
+
+
+def merged(ctx, box, draw, sigma=7.0, lo=0.2, hi=0.58, detail=0.35):
+    """Draw a group of particle clouds as ONE connected volume.
+    The puffs are rendered off-screen, then their coverage is blurred and re-thresholded (metaball style): gaps
+    between neighbouring puffs fill in, bumpy ball outlines melt into one soft continuous silhouette and stray
+    puffs merge or vanish. Colour is smoothed the same way; `detail` of the original puff shading is laid back on
+    top, inside the merged shape only. box = (x0, y0, x1, y1) in user space (clipped to the visible frame);
+    draw(ctx) paints the clouds in user coordinates."""
+    from scipy import ndimage
+    m = ctx.get_matrix()
+    s = max(1.0, min(2.0, math.hypot(m.xx, m.yx)))           # keep resolution under camera zoom
+    # clip the box to what is visible (plus a margin for the blur)
+    vis = [ctx.device_to_user(dx, dy) for dx in (-80, 1920 + 80) for dy in (-80, 1080 + 80)]
+    x0 = max(box[0], min(v[0] for v in vis)); x1 = min(box[2], max(v[0] for v in vis))
+    y0 = max(box[1], min(v[1] for v in vis)); y1 = min(box[3], max(v[1] for v in vis))
+    q = 4
+    w, h = int((x1 - x0) * s) // q * q, int((y1 - y0) * s) // q * q
+    if w < q * 4 or h < q * 4:
+        return
+    surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, w, h)
+    c = cairo.Context(surf)
+    c.scale(s, s); c.translate(-x0, -y0)
+    draw(c)
+    surf.flush()
+    arr = np.ndarray((h, w, 4), np.uint8, surf.get_data())
+    small = arr.reshape(h // q, q, w // q, q, 4).mean((1, 3), dtype=np.float32) / 255
+    sg = sigma * s / q
+    Ab = ndimage.gaussian_filter(small[..., 3], sg)
+    Ac = ndimage.gaussian_filter(small[..., 3], sg * 0.7)
+    Cb = np.stack([ndimage.gaussian_filter(small[..., k], sg * 0.7) for k in range(3)], -1)
+    A2 = _smoothstep(lo, hi, Ab)
+    col = np.clip(Cb / np.maximum(Ac, 1e-3)[..., None], 0, 1)
+    lh, lw = A2.shape
+    low = np.empty((lh, lw, 4), np.uint8)
+    low[..., :3] = (col * A2[..., None] * 255).astype(np.uint8)
+    low[..., 3] = (A2 * 255).astype(np.uint8)
+    lows = cairo.ImageSurface.create_for_data(bytearray(low.tobytes()), cairo.FORMAT_ARGB32, lw, lh, lw * 4)
+    ctx.save()
+    ctx.translate(x0, y0); ctx.scale(1 / s, 1 / s)
+    ctx.save(); ctx.scale(q, q)
+    lowpat = cairo.SurfacePattern(lows); lowpat.set_filter(cairo.FILTER_BILINEAR)
+    lowpat.set_extend(cairo.EXTEND_PAD)
+    ctx.set_source(lowpat); ctx.paint()                       # the merged, smoothed volume
+    ctx.restore()
+    if detail > 0:                                            # puff shading, only inside the merged shape
+        ctx.push_group()
+        ctx.set_source_surface(surf, 0, 0); ctx.paint_with_alpha(detail)
+        ctx.pop_group_to_source()
+        ctx.save(); ctx.scale(q, q)
+        ctx.mask(lowpat)
+        ctx.restore()
+    ctx.restore()

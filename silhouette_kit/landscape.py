@@ -183,7 +183,9 @@ def cumulus_rich(ctx, x, y, w, tones, seed, a=1.0, light=(0.55, -0.85), tower=0.
     """Particle (smoke-puff) cumulus, see smokecloud.py: underside around y, w wide,
     coloured with tones = (shadow, body, lit, highlight)."""
     from . import smokecloud
-    smokecloud.cloud(ctx, x, y, w * 1.1, tones, seed, t, a=a, tower=tower)
+    w = w * 1.1
+    smokecloud.merged(ctx, (x - w * 0.75, y - w * 0.9, x + w * 0.75, y + w * 0.35),
+                      lambda c: smokecloud.cloud(c, x, y, w, tones, seed, t, a=a, tower=tower))
 
 
 def cumulus_cel(ctx, x, y, w, tones, seed, a=1.0, light=(0.55, -0.85), tower=0.6, t=0.0):
@@ -268,6 +270,7 @@ def cloud_deck(ctx, T, tones, seed=0, horizon=820, scroll=0.0, speed=1.0, haze=N
     span = W + 2000
     hz = haze or tones[2]
     rows = 5
+    plan = []
     for r in range(rows):
         q = r / (rows - 1)                                   # 0 = far/top .. 1 = near/bottom
         yb = horizon - 110 + q * 330
@@ -280,15 +283,21 @@ def cloud_deck(ctx, T, tones, seed=0, horizon=820, scroll=0.0, speed=1.0, haze=N
         while x < span:
             wd = rnd.uniform(w0, w1) * scale
             if rnd.random() > 0.18 * (1 - q):               # a few gaps in the far rows only
-                items.append((x, wd, rnd.uniform(-70, 70) * scale * (0.5 + q), rnd.uniform(0.0, 0.95 - 0.25 * q), rnd.random() < 0.5,
+                items.append((x, wd, rnd.uniform(-70, 70) * scale * (0.5 + q), rnd.uniform(0.0, 0.95 - 0.25 * q),
                               len(items)))
             x += wd * sp * rnd.uniform(0.7, 1.3)
         off = scroll * par + T * speed * 4 * par
-        for x0, wd, dy, twk, fl, k in sorted(items, key=lambda it: it[2]):
+        for x0, wd, dy, twk, k in sorted(items, key=lambda it: it[2]):
             xx = (x0 - off) % span - 1000
             if -wd < xx < W + wd:
-                smokecloud.cloud(ctx, xx, yb + dy, wd, tn, seed * 97 + r * 31 + k, T, a=(0.85 + 0.15 * q) * a,
-                                 tower=twk, churn=max(0.4, min(1.5, speed)), detail=0.8 + 0.4 * q)
+                plan.append((xx, yb + dy, wd, tn, seed * 97 + r * 31 + k, (0.85 + 0.15 * q) * a, twk, 0.8 + 0.4 * q))
+
+    def paint(c):
+        for xx, yy, wd, tn, sd, al, twk, det in plan:
+            smokecloud.cloud(c, xx, yy, wd, tn, sd, T, a=al, tower=twk, churn=max(0.4, min(1.5, speed)), detail=det)
+
+    # all rows melt into one connected volume
+    smokecloud.merged(ctx, (-300, horizon - 900 * scale - 150, W + 300, horizon + 330 + 700 * scale), paint)
 
 
 def sky_clouds(ctx, T, tones, seed=0, scroll=0.0, speed=1.0, density=1.0, haze=None, horizon=820, scale=1.0):
