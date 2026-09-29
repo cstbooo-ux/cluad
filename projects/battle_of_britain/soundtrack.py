@@ -143,7 +143,7 @@ def build(out, TL, IMPACTS, beat, DROP, END, DUR):
             ev.add(impact(int(ti * 13), size=0.5 * st), ti, gain=0.45)
             ev.add(whoosh(0.22, int(ti * 17), up=False, lo=500, hi=6000), ti - 0.05, gain=0.3)
     # near fly-bys (same schedule as shots.air_traffic near passes)
-    near_shots = {7: 2, 10: 9, 11: 11, 12: 13, 14: 15}
+    near_shots = {6: 2, 10: 11, 11: 13}
     for idx, seed in near_shots.items():
         t0, t1 = TL[idx][0], TL[idx][1]
         k = math.floor((t0 + seed * 0.37) / 1.6)

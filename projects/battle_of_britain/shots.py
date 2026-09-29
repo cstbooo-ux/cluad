@@ -153,6 +153,8 @@ def shot_follow_plane(ctx, u, T, redness=0.0, tilt=0.0, climb=0.0, plane_xy=(820
     yy, pp = y + 6 * math.sin(T * 2.3), pitch + 0.03 * math.sin(T * 1.7)
     if craft == "paper":
         A.paper_plane(ctx, x, yy, size, pitch=pp)
+    elif craft == "none":
+        pass
     else:
         A.aircraft(ctx, "spitfire", x, yy, size, pitch=pp, prop_t=T, light=RED_LIGHT, light_amt=0.45)
     for i, (t0, dur, cy, sc) in enumerate(CLOUD_PASSES):        # clouds whipping past in front of the camera
@@ -400,10 +402,40 @@ def battle_sky(ctx, T, scroll=0.0, tilt=0.0, smoke=True, bombers=None, flak_n=10
         air_traffic(ctx, T, seed=seed, density=0, near=True, far=False, mid=False)
 
 
-def shot_cut_spitfire(ctx, u, T, **follow):
-    """The hard cut: same sky, same place, same heading - the paper plane is now a Spitfire. Tracers streak past."""
-    shot_follow_plane(ctx, 1.0, T, craft="spitfire", **follow)
-    if u > 0.08:
+def shot_cut_spitfire(ctx, u, T, reveal=0.0, **follow):
+    """One continuous shot from the transformation to the formation: same sky and clouds as the paper-plane ride.
+    The paper plane is now a Spitfire; as `reveal` goes 0 -> 1 it levels off, the wingmen slide into formation
+    and the battle (smoke columns, flak, bombers, distant dogfights) fades in in the SAME sky."""
+    x, y = follow["plane_xy"]
+    follow = dict(follow)
+    follow["pitch"] = follow["pitch"] - 0.26 * ease(reveal)
+    r = ease(reveal)
+    # the follow background without the aircraft
+    fp = dict(follow); fp["size"] = 0.0
+    shot_follow_plane(ctx, 1.0, T, craft="none", **fp)
+    if r > 0.001:
+        ctx.push_group()                                        # the battle, far away in the same sky
+        fx.smoke(ctx, 260, 1150, 900, 55, "#2a0c0c", seed=33, t=T, a=0.8, lean=0.35)
+        fx.smoke(ctx, 1720, 1150, 760, 42, "#2a0c0c", seed=34, t=T, a=0.7, lean=-0.2)
+        rnd = random.Random(35)
+        from silhouette_kit.core import flak
+        for _ in range(8):
+            flak(ctx, rnd.uniform(0, W), rnd.uniform(60, 420), rnd.uniform(10, 20), "#1e0808", seed=rnd.randint(0, 999), a=0.7)
+        for i in range(6):
+            A.aircraft(ctx, "he111", 1250 + (i % 3) * 150 - (i // 3) * 90 + T * 25 - 400 * (1 - r),
+                       120 + (i % 3) * 28 + (i // 3) * 60, 160, pitch=0.02, haze=HAZE, haze_amt=0.55,
+                       light=RED_LIGHT, light_amt=0.4)
+        air_traffic(ctx, T, seed=0, density=0.5, near=False, zmax=0.5)
+        ctx.pop_group_to_source(); ctx.paint_with_alpha(r)
+    size = follow["size"]
+    yy, pp = y + 6 * math.sin(T * 2.3), follow["pitch"] + 0.03 * math.sin(T * 1.7)
+    for i, (dx, dy, k) in enumerate(((-340, 130, 0.8), (-620, 250, 0.64))):     # wingmen sliding into formation
+        if r > 0.001:
+            wx = x + dx - 900 * (1 - r) ** 2
+            A.aircraft(ctx, "spitfire", wx, yy + dy + 5 * math.sin(T * 2 + i), size * k, pitch=pp, prop_t=T + i,
+                       light=RED_LIGHT, light_amt=0.45, haze=HAZE, haze_amt=0.1 * (i + 1))
+    A.aircraft(ctx, "spitfire", x, yy, size, pitch=pp, prop_t=T, light=RED_LIGHT, light_amt=0.45)
+    if 0.08 < u and reveal < 0.6:
         fx.tracers(ctx, T * 0.6 + u, 41, n=6, x0=W + 60, y0=380, ang=math.pi + 0.06, spread=60, speed=3000)
 
 

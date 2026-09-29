@@ -110,7 +110,7 @@ def cut_shot(ctx, t):
         A.aircraft(ctx, "spitfire", x, y + 6 * math.sin(t * 2.3), PLANE["size"],
                    pitch=PLANE["pitch"] + 0.03 * math.sin(t * 1.7), livery=None, c="#000000", markings=False)
         return
-    S.shot_cut_spitfire(ctx, lin(t, DROP, beat(1)), t, **follow_params(t))
+    S.shot_cut_spitfire(ctx, lin(t, DROP, beat(4)), t, reveal=lin(t, beat(1) - 0.1, beat(3)), **follow_params(t))
 
 
 def hit_shot(ctx, t):
@@ -139,10 +139,7 @@ TL = [
     (0.0, 4.6, run_shot, dict()),
     (4.6, 5.71, throw_shot, dict(zoom=(1.0, 1.06))),
     (5.71, DROP, follow_shot, dict(zoom=(1.0, 1.0), center=PLANE["plane_xy"], shake=1.0)),
-    (DROP, beat(1), cut_shot, dict(center=PLANE["plane_xy"], anchor=(1010, 560), zoom=(1.0, 1.9), zoom_out=True,
-                                    shake=3.0)),
-    (beat(1), beat(4), lambda c, t: S.shot_formation(c, lin(t, beat(1), beat(4)), t),
-     dict(zoom=(2.6, 1.0), center=(700, 610), anchor0=(1010, 560), shake=2.5, zoom_ease=True)),
+    (DROP, beat(4), cut_shot, dict(center=PLANE["plane_xy"], push=(DROP, beat(1), beat(3)), shake=3.0)),
     (beat(4), beat(6), lambda c, t: S.shot_cockpit(c, lin(t, beat(4), beat(6)), t, jaw=0.4 + 0.6 * lin(t, beat(4), beat(5))),
      dict(zoom=(1.0, 1.08), shake=3.0)),
     (beat(6), beat(7), lambda c, t: S.shot_stick(c, 0, t, squeeze=ease(lin(t, beat(6), beat(6) + 0.3))),
@@ -173,8 +170,8 @@ IMPACTS = [(DROP, 1.8, "#ffffff"), (beat(17), 2.0, "#ff5a30"), (END, 1.2, "#fff4
 for t_, st_ in ((8.4, 0.18), (9.9, 0.18), (11.2, 0.3), (11.86, 0.25), (12.2, 0.3), (12.37, 0.3), (12.85, 0.4),
                 (13.22, 0.5)):                              # turbulence jolts as clouds whip past before the drop
     IMPACTS.append((t_, st_, None))
-for s_ in TL[4:-1]:                                          # every climax cut
-    if s_[0] not in (beat(17),):
+for s_ in TL[3:-1]:                                          # every climax cut
+    if s_[0] not in (beat(17), DROP):
         IMPACTS.append((s_[0], 0.55, None))
 for h_t, h_s in MUSIC["hits"]:                              # strong accents inside the climax
     if DROP + 0.3 < h_t < END - 0.1 and h_s > 1.0:
@@ -203,6 +200,14 @@ def camera(t, i):
     ax, ay = cx, cy                                          # screen point the world `center` is pinned to
     if "anchor" in cam:
         ax, ay = cx + (cam["anchor"][0] - cx) * ku, cy + (cam["anchor"][1] - cy) * ku
+    if "push" in cam:                                        # push in on the plane, then pull back out (one shot)
+        p0, p1, p2 = cam["push"]
+        if t < p1:
+            k = 1 - (1 - lin(t, p0, p1)) ** 3
+        else:
+            k = 1 - ease(lin(t, p1, p2))
+        z = 1.0 + 0.9 * k
+        ax, ay = cx + (1010 - cx) * k, cy + (560 - cy) * k
     if "anchor0" in cam:
         ax, ay = cam["anchor0"][0] + (cx - cam["anchor0"][0]) * ku, cam["anchor0"][1] + (cy - cam["anchor0"][1]) * ku
     amp = cam.get("shake", 0.0)
