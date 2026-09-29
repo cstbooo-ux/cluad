@@ -22,22 +22,23 @@ def label(img, items):
 def aircraft_sheet():
     s, ctx = new_canvas()
     vgrad(ctx, 0, H, [(0, "#c9b6a0"), (1, "#a8917c")])
-    A.aircraft(ctx, "spitfire", 330, 200, 520, markings="roundel")
-    A.aircraft(ctx, "bf109", 960, 200, 500, markings="cross")
-    A.aircraft(ctx, "he111", 1580, 210, 560, markings="cross")
-    A.aircraft(ctx, "spitfire", 330, 540, 520, pitch=0.35, bank=0.22, markings="roundel")
-    A.aircraft(ctx, "bf109", 960, 540, 500, pitch=-0.15, bank=-0.25, markings="cross")
+    A.aircraft(ctx, "spitfire", 330, 200, 520)
+    A.aircraft(ctx, "bf109", 960, 200, 500)
+    A.aircraft(ctx, "he111", 1580, 210, 560)
+    vgrad(ctx, 350, 690, [(0, "#3a1418"), (0.6, "#b0433a"), (1, "#ec8c55")], x0=0, x1=1240)
+    A.aircraft(ctx, "spitfire", 330, 540, 520, pitch=0.35, bank=0.22, light="#ff6a44", light_amt=0.5)
+    A.aircraft(ctx, "bf109", 960, 540, 500, pitch=-0.15, bank=-0.25, light="#ff6a44", light_amt=0.5)
     A.paper_plane(ctx, 1580, 540, 520, pitch=0.35)
-    A.aircraft(ctx, "spitfire", 1580, 540, 520, pitch=0.35, bank=0.22, a=0.18)
-    A.planform(ctx, "spitfire", 330, 880, 300, heading=-0.3)
-    A.planform(ctx, "bf109", 800, 880, 290, heading=-0.3)
-    A.planform(ctx, "he111", 1260, 880, 280, heading=-0.3)
+    A.aircraft(ctx, "spitfire", 1580, 540, 520, pitch=0.35, bank=0.22, a=0.25)
+    A.planform(ctx, "spitfire", 330, 880, 300, heading=-0.3, view="above")
+    A.planform(ctx, "bf109", 800, 880, 290, heading=-0.3, view="below")
+    A.planform(ctx, "he111", 1260, 880, 280, heading=-0.3, view="below")
     A.tail_on(ctx, "bf109", 1700, 860, 330, roll=0.2)
     img = Image.fromarray(post(s, grain=3, vignette=0.1))
-    label(img, [(90, 40, "Spitfire Mk I  (side, RAF roundel hint)"), (740, 40, "Bf 109E  (side, cross hint)"),
-                (1330, 40, "He 111  (side)"), (90, 360, "Spitfire climbing + banked"),
-                (740, 360, "Bf 109 diving + banked"), (1330, 360, "paper plane over Spitfire ghost (cut match)"),
-                (90, 700, "Spitfire planform"), (620, 700, "Bf 109 planform"), (1080, 700, "He 111 planform"),
+    label(img, [(90, 40, "Spitfire Mk I  (RAF: green/earth, roundel, fin flash)"), (740, 40, "Bf 109E  (grey-green, yellow nose/rudder, cross)"),
+                (1330, 40, "He 111  (side)"), (90, 360, "Spitfire climbing, red sky light"),
+                (740, 360, "Bf 109 diving, red sky light"), (1330, 360, "paper plane over Spitfire ghost (cut match)"),
+                (90, 700, "Spitfire from above"), (620, 700, "Bf 109 from below"), (1080, 700, "He 111 from below"),
                 (1540, 700, "Bf 109 tail-on (gunsight)")])
     img.save(os.path.join(OUT, "aircraft.png"))
 
@@ -57,6 +58,7 @@ def character_sheet():
     pilot_profile(ctx, 1450, 270, 250, jaw=1.0, rim="#ff7a4a")
     vgrad(ctx, 560, H, [(0, "#2a1012"), (1, "#8a3024")], x0=1060, x1=W)
     spade_grip(ctx, 1400, 780, 140, squeeze=1.0, button="#c8a050")
+    from silhouette_kit.child import child as _c
     img = Image.fromarray(post(s, grain=3, vignette=0.1))
     label(img, [(90, 40, "boy · run cycle"), (90, 520, "boy · throw (wind-up -> release -> follow)"),
                 (1080, 40, "pilot close-up (helmet, goggles, Irvin collar)"),
