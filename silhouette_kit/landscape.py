@@ -180,10 +180,10 @@ def tones_mix(a, b, t):
 
 
 def cumulus_rich(ctx, x, y, w, tones, seed, a=1.0, light=(0.55, -0.85), tower=0.6, t=0.0):
-    """Realistic cumulus from the pre-rendered sprite library (silhouette_kit/clouds.py): flat base on y, w wide,
-    coloured with tones = (shadow, body, lit, highlight). The sun is on the right; light[0] < 0 mirrors it."""
-    from . import clouds
-    clouds.draw(ctx, x, y, w * 1.1, tones, clouds.pick(seed, tower), a, flip=light[0] < 0)
+    """Particle (smoke-puff) cumulus, see smokecloud.py: underside around y, w wide,
+    coloured with tones = (shadow, body, lit, highlight)."""
+    from . import smokecloud
+    smokecloud.cloud(ctx, x, y, w * 1.1, tones, seed, t, a=a, tower=tower)
 
 
 def cumulus_cel(ctx, x, y, w, tones, seed, a=1.0, light=(0.55, -0.85), tower=0.6, t=0.0):
@@ -258,37 +258,37 @@ def cirrus(ctx, y0, y1, tone, seed, t=0.0, a=0.35, n=14):
 
 
 def cloud_deck(ctx, T, tones, seed=0, horizon=820, scroll=0.0, speed=1.0, haze=None, density=1.0, scale=1.0, a=1.0):
-    """One continuous far cloud bank along the horizon: two rows of overlapping cumulus sprites (a hazier back row
-    with towers, a front row of broad cumulus) that merge into a single mass, sitting on a soft haze floor.
+    """One continuous far cloud field around the horizon. Clouds are scattered in depth: the farthest (top) rows
+    are small and hazy, nearer rows lower down are bigger, denser and clearer, so the mass is thickest below and
+    both its top and bottom edges are irregular. Drawn far-to-near so nearer clouds overlap the ones behind.
+    Every cloud is a particle emitter of smoke puffs (smokecloud.py), so the whole bank slowly churns.
     `scroll` is the horizontal camera offset in px (already scaled for distance); drift is slow."""
-    from . import clouds
+    from . import smokecloud
     rnd = random.Random(seed)
     span = W + 2000
     hz = haze or tones[2]
-    rows = ((horizon - 40, (420, 900), 0.4, 0.5, 0.92, 0.6, 1.0),        # yb, widths, spacing, haze, alpha, tower, par
-            (horizon + 25, (620, 980), 0.42, 0.25, 1.0, 0.45, 1.25))
-    for r, (yb, (w0, w1), sp, hm, al, tw, par) in enumerate(rows):
-        tn = tuple(mix(c, hz, hm) for c in tones) if haze else tones
-        sp = sp + 0.25 * (1 - min(1.0, density))
-        x, k = rnd.uniform(0, 300), 0
+    rows = 5
+    for r in range(rows):
+        q = r / (rows - 1)                                   # 0 = far/top .. 1 = near/bottom
+        yb = horizon - 110 + q * 330
+        w0, w1 = (340 + 360 * q), (620 + 520 * q)
+        tn = tuple(mix(c, hz, 0.55 * (1 - q) + 0.08) for c in tones) if haze else tones
+        par = 0.8 + 0.6 * q
+        sp = (0.5 - 0.12 * q) + 0.25 * (1 - min(1.0, density))
+        x = rnd.uniform(0, 400)
         items = []
         while x < span:
             wd = rnd.uniform(w0, w1) * scale
-            items.append((x, wd, rnd.uniform(-14, 14) * scale, min(1.0, max(0.0, tw + rnd.uniform(-0.5, 0.5))), k))
-            x += wd * sp * rnd.uniform(0.8, 1.15)
-            k += 1
+            if rnd.random() > 0.18 * (1 - q):               # a few gaps in the far rows only
+                items.append((x, wd, rnd.uniform(-70, 70) * scale * (0.5 + q), rnd.uniform(0.0, 0.95 - 0.25 * q), rnd.random() < 0.5,
+                              len(items)))
+            x += wd * sp * rnd.uniform(0.7, 1.3)
         off = scroll * par + T * speed * 4 * par
-        for x0, wd, dy, twk, k in items:
+        for x0, wd, dy, twk, fl, k in sorted(items, key=lambda it: it[2]):
             xx = (x0 - off) % span - 1000
             if -wd < xx < W + wd:
-                clouds.draw(ctx, xx, yb + dy, wd, tn, clouds.pick(seed * 97 + r * 31 + k, twk), al * a, flip=False)
-    # haze floor: the bases dissolve into the distant murk instead of ending on a hard line
-    fl = mix(tones[1], hz, 0.6)
-    g = cairo.LinearGradient(0, horizon - 30, 0, horizon + 420)
-    g.add_color_stop_rgba(0, *fl, 0.0)
-    g.add_color_stop_rgba(0.2, *fl, 0.85 * a)
-    g.add_color_stop_rgba(1, *fl, 0.55 * a)
-    ctx.rectangle(-200, horizon - 30, W + 400, 2000); ctx.set_source(g); ctx.fill()
+                smokecloud.cloud(ctx, xx, yb + dy, wd, tn, seed * 97 + r * 31 + k, T, a=(0.85 + 0.15 * q) * a,
+                                 tower=twk, churn=max(0.4, min(1.5, speed)), detail=0.8 + 0.4 * q)
 
 
 def sky_clouds(ctx, T, tones, seed=0, scroll=0.0, speed=1.0, density=1.0, haze=None, horizon=820, scale=1.0):

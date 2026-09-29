@@ -2,7 +2,7 @@
 
 Offline: `generate()` builds a small library of cloud sprites. Each sprite is a 2-D density field made of
 hierarchical puffs (big domes -> smaller billows -> tiny bumps = cauliflower cumulus), eroded at the edges with
-fractal noise and cut off by a slightly ragged flat base. Lighting is computed by marching toward the sun through
+fractal noise, with a lumpy, softly dissolving underside. Lighting is computed by marching toward the sun through
 the density (Beer-Lambert transmittance) plus a powder term, an ambient term that darkens toward the base, and
 forward-scatter at thin edges (silver lining). Sprites store luminance + alpha only (8-bit LA PNG).
 
@@ -78,9 +78,10 @@ def _puffs(kind, rng):
         new = []
         for cx, cy, cz, r in level:
             for _ in range(rng.randint(k // 2 + 1, k)):
-                a = rng.uniform(-math.pi * 1.12, 0.3)              # mostly on the upper half
-                phi = rng.uniform(0.45 if g == 0 else 0.75, 1.5)                        # angle away from the view axis
-                rr = r * math.exp(rng.uniform(math.log(rs[0]), math.log(rs[1])))
+                down = rng.random() < 0.28
+                a = rng.uniform(0.35, math.pi - 0.35) if down else rng.uniform(-math.pi * 1.12, 0.3)
+                phi = rng.uniform(0.45 if g == 0 else 0.75, 1.5)    # angle away from the view axis
+                rr = r * math.exp(rng.uniform(math.log(rs[0]), math.log(rs[1]))) * (0.8 if down else 1.0)
                 d = r - rr * (1 - dd)                               # child pokes out of the parent surface
                 new.append((cx + math.cos(a) * math.sin(phi) * d, cy + math.sin(a) * math.sin(phi) * d,
                             cz + math.cos(phi) * d, rr))
@@ -90,7 +91,7 @@ def _puffs(kind, rng):
 
 
 def _render_fields(kind, seed):
-    """Height (toward viewer), thickness and analytic normals of the sphere union, cut by a flat ragged base."""
+    """Height (toward viewer), thickness and analytic normals of the sphere union, with an irregular, soft underside."""
     from scipy import ndimage
     rng = random.Random(seed)
     nr = np.random.default_rng(seed)
@@ -133,8 +134,10 @@ def _render_fields(kind, seed):
     # thickness -> density; ragged fbm erosion eats the thinnest edges
     ero = fbm((SH, SW), nr, 40, 4)
     T = np.clip(T * inside - 22 * (ero - 0.35), 0, None)
-    rag = (fbm((1, SW), nr, 40, 3)[0] - 0.5) * 22                   # flat, ragged base
-    cut = np.clip((BASE + rag[None, :] - yy) / 14.0, 0, 1)
+    # irregular underside: a lumpy, uneven lower edge that dissolves softly (no ruler-flat base)
+    rag = (fbm((1, SW), nr, 170, 2)[0] - 0.5) * 150 + (fbm((1, SW), nr, 45, 3)[0] - 0.5) * 50 + 30
+    wisp = fbm((SH, SW), nr, 30, 3)
+    cut = np.clip((BASE + rag[None, :] - yy) / 45.0 + (wisp - 0.5) * 0.8, 0, 1)
     T *= cut
     return H, T, (NX, NY, NZ), ero
 
@@ -290,7 +293,7 @@ def _surface(idx, tones):
     bgra[..., 3] = (a[..., 0] * 255).astype(np.uint8)
     surf = cairo.ImageSurface.create_for_data(bytearray(bgra.tobytes()), cairo.FORMAT_ARGB32, SW, SH, SW * 4)
     _COL[key] = surf
-    while len(_COL) > 64:                     # ~4 MB each
+    while len(_COL) > 110:                    # ~4 MB each
         _COL.popitem(last=False)
     return surf
 
