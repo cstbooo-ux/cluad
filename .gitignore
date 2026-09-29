@@ -4,3 +4,5 @@ __pycache__/
 projects/*/out/
 projects/*/stills/scene_*_A.png
 projects/*/stills/scene_*_B.png
+# copyrighted music used only for timing / preview muxing
+projects/*/music/*.wav
