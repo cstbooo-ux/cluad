@@ -48,24 +48,30 @@ def ease(u):
 
 
 # ================================================================== 1930 · KENT
-def kent_background(ctx, pan, T, redness=0.0, drop=0.0):
-    """Countryside layers. pan = camera x offset (px, >0 moves right); drop = camera tilting up (px, ground slides down)."""
+def kent_background(ctx, pan, T, redness=0.0, tilt=0.0, climb=0.0):
+    """Countryside layers under one camera model.
+    pan   : camera travel to the right (px at the near-ground layer)
+    tilt  : camera pitching up (px) - moves EVERY layer down by the same amount (rotation, no parallax)
+    climb : camera rising (px at the near-ground layer) - moves each layer down by climb * depth factor
+    Each layer uses one depth factor f for both axes: offset = (-pan * f, tilt + climb * f)."""
+    def layer(f):
+        ctx.save(); ctx.translate(-pan * f, tilt + climb * f)
     sky(ctx, redness)
-    sun(ctx, 1500 - pan * 0.02, 300 + drop * 0.1, 70, redness)
-    ctx.save(); ctx.translate(0, drop * 0.2)
-    L.sky_clouds(ctx, T, L.tones_mix("gold", "red", redness), seed=5, scroll=pan * 0.3, speed=0.3,
+    sun(ctx, 1500 - pan * 0.01, 300 + tilt * 0.95, 70, redness)
+    ctx.save(); ctx.translate(0, tilt + climb * 0.06)
+    L.sky_clouds(ctx, T, L.tones_mix("gold", "red", redness), seed=5, scroll=pan * 0.9, speed=0.3,
                  density=0.6, haze=mix("#f4d193", HAZE, redness), horizon=540, scale=0.8)
     ctx.restore()
-    ctx.save(); ctx.translate(-pan * 0.05, drop * 0.4)
+    layer(0.05)
     L.rolling_field(ctx, 640, 26, mix(KENT["far"], "#9a4a3a", redness), seed=1, freq=0.5)
     ctx.restore()
-    ctx.save(); ctx.translate(-pan * 0.15, drop * 0.6)
+    layer(0.15)
     L.rolling_field(ctx, 700, 18, mix(KENT["fields"], "#7a3028", redness), seed=2, freq=0.8)
     L.oast_house(ctx, 1320, 712, 120, mix(KENT["oast"], "#5a2420", redness), cowl="#efe6d2", t=T)
     L.oast_house(ctx, 1470, 716, 95, mix(KENT["oast"], "#5a2420", redness), cowl="#efe6d2", t=T + 1)
     L.hedgerow(ctx, 742, -200, W + 600, mix(KENT["hedge"], "#4a1a18", redness), seed=3, h=30)
     ctx.restore()
-    ctx.save(); ctx.translate(-pan * 0.35, drop * 0.85)
+    layer(0.35)
     L.rolling_field(ctx, 800, 14, mix("#6f6440", "#4a1c18", redness), seed=4, freq=1.0)
     L.field_stripes(ctx, 800, 900, "#3e3824", a=0.25)
     L.oak_tree(ctx, 420, 812, 380, mix(KENT["oak"], "#1a0a0a", redness), seed=7, t=T)
@@ -117,36 +123,44 @@ def shot_kent_throw(ctx, u, T, pan=700.0, k=None, fly=0.0):
         pose = (r["hand"][0], r["hand"][1] - 6, 58, 0.5)
     else:
         q = max((k - 0.5) / 0.5, fly)
-        pose = (r["hand"][0] + q * 520, r["hand"][1] - 20 - q * 300, 58 + q * 40, 0.42)
+        pose = (r["hand"][0] + q * 300, r["hand"][1] - 20 - q * 150, 58 + q * 40, 0.42)
     A.paper_plane(ctx, pose[0], pose[1], pose[2], pitch=pose[3])
     L.grass(ctx, H - 40, -100, W + 100, 70, KENT["fg"], seed=9, t=T, density=12)
     return pose
 
 
 CLOUD_PASSES = [(8.4, 0.55, 780, 1.0), (9.9, 0.5, 300, 0.8), (11.2, 0.5, 860, 1.2), (12.2, 0.45, 250, 1.0),
-                (12.85, 0.4, 700, 1.5), (13.22, 0.3, 520, 2.4)]      # (start, duration, y, scale): clouds rushing past
+                (12.8, 0.38, 760, 1.4), (13.08, 0.26, 180, 1.1)]      # (start, duration, y, scale): clouds rushing past
 
 
-def shot_follow_plane(ctx, u, T, redness=0.0, drop=0.0, plane_xy=(820, 560), size=260, pitch=0.38, pan=700.0):
-    """Camera rides with the paper plane: fields fall away, sky turns from gold to red, clouds rush past."""
+def shot_follow_plane(ctx, u, T, redness=0.0, tilt=0.0, climb=0.0, plane_xy=(820, 560), size=260, pitch=0.38,
+                      pan=700.0, craft="paper"):
+    """Camera rides with the paper plane: the camera pitches up and climbs, the fields fall away with proper
+    parallax, near clouds descend into view from above, the sky turns from gold to red.
+    craft='spitfire' draws the fighter in exactly the same pose (the transformation)."""
     tones = L.tones_mix("gold", "red", redness)
-    kent_background(ctx, pan, T, redness=redness, drop=drop)
-    kent_ground(ctx, pan, T, drop=drop * 1.2)
-    if drop < 400:                                       # the boy, left behind on the hillock
-        ctx.save(); ctx.translate(0, drop * 1.2)
+    kent_background(ctx, pan, T, redness=redness, tilt=tilt, climb=climb)
+    kent_ground(ctx, pan, T, drop=tilt + climb)
+    if tilt + climb < 600:                               # the boy, left behind on the hillock
+        ctx.save(); ctx.translate(0, tilt + climb)
         child(ctx, 1880 - pan, ground_y(1880) + 4, 250, 0.0, throw=1.0)
         ctx.restore()
-    for i in range(3):                                  # steady near clouds sliding past, below the plane
-        L.cumulus_rich(ctx, (1900 - (pan * 0.6 + i * 700)) % 2600 - 350,
-                       1500 - i * 40 - 520 * min(1, drop / 900), 760, tones, 60 + i, a=0.92, tower=0.5, t=T)
+    f = 0.6                                              # a bank of clouds above, descending as we climb into it
+    for i in range(4):
+        L.cumulus_rich(ctx, (2400 - (pan * f + i * 650)) % 2600 - 350, -420 - (i % 2) * 160 + tilt + climb * f,
+                       780, tones, 60 + i, a=0.93, tower=0.5, t=T)
     x, y = plane_xy
-    A.paper_plane(ctx, x, y + 6 * math.sin(T * 2.3), size, pitch=pitch + 0.03 * math.sin(T * 1.7))
+    yy, pp = y + 6 * math.sin(T * 2.3), pitch + 0.03 * math.sin(T * 1.7)
+    if craft == "paper":
+        A.paper_plane(ctx, x, yy, size, pitch=pp)
+    else:
+        A.aircraft(ctx, "spitfire", x, yy, size, pitch=pp, prop_t=T, light=RED_LIGHT, light_amt=0.45)
     for i, (t0, dur, cy, sc) in enumerate(CLOUD_PASSES):        # clouds whipping past in front of the camera
         q = (T - t0) / dur
         if 0 <= q <= 1:
             w = 1300 * sc
             cx = W + w * 0.6 - q * (W + w * 1.2)
-            L.cumulus_rich(ctx, cx, cy + w * 0.12, w, tones, 300 + i, a=0.96, tower=0.8, t=T)
+            L.cumulus_rich(ctx, cx, cy + w * 0.12 + q * 90, w, tones, 300 + i, a=0.96, tower=0.8, t=T)
 
 
 # ================================================================== air traffic
@@ -357,7 +371,7 @@ def air_traffic(ctx, T, seed=0, density=1.0, near=True, far=True, mid=True, y_ba
 
 # ================================================================== 1940 · BATTLE
 def battle_sky(ctx, T, scroll=0.0, tilt=0.0, smoke=True, bombers=None, flak_n=10, seed=0, traffic=1.0, near=True,
-               cloud_speed=1.0, zmax=0.55):
+               cloud_speed=1.0, zmax=0.55, traffic_alpha=1.0):
     ctx.save()
     if tilt:
         ctx.translate(W / 2, H / 2); ctx.rotate(tilt); ctx.scale(1.25, 1.25); ctx.translate(-W / 2, -H / 2)
@@ -378,26 +392,33 @@ def battle_sky(ctx, T, scroll=0.0, tilt=0.0, smoke=True, bombers=None, flak_n=10
                        by + (i % 3) * s * 0.18 + (i // 3) * s * 0.35, s, pitch=0.02, haze="#b3483a",
                        haze_amt=0.55, light=RED_LIGHT, light_amt=0.4)
     if traffic:
+        ctx.push_group()
         air_traffic(ctx, T, seed=seed, density=traffic, near=False, zmax=zmax)
+        ctx.pop_group_to_source(); ctx.paint_with_alpha(traffic_alpha)
     ctx.restore()
     if traffic and near:
         air_traffic(ctx, T, seed=seed, density=0, near=True, far=False, mid=False)
 
 
-def shot_cut_spitfire(ctx, u, T, plane_xy=(820, 560), size=260, pitch=0.38):
-    """The hard cut: same place, same heading - the paper plane is now a Spitfire."""
-    battle_sky(ctx, T, smoke=False, flak_n=4, traffic=0.35, near=False)
-    x, y = plane_xy
-    A.aircraft(ctx, "spitfire", x, y + 6 * math.sin(T * 2.3), size, pitch=pitch + 0.03 * math.sin(T * 1.7),
-               prop_t=T, light=RED_LIGHT, light_amt=0.45)
-    fx.tracers(ctx, T * 0.6 + u, 41, n=6, x0=W + 60, y0=300, ang=math.pi + 0.08, spread=40, speed=3000)
+def shot_cut_spitfire(ctx, u, T, **follow):
+    """The hard cut: same sky, same place, same heading - the paper plane is now a Spitfire. Tracers streak past."""
+    shot_follow_plane(ctx, 1.0, T, craft="spitfire", **follow)
+    if u > 0.08:
+        fx.tracers(ctx, T * 0.6 + u, 41, n=6, x0=W + 60, y0=380, ang=math.pi + 0.06, spread=60, speed=3000)
 
 
 def shot_formation(ctx, u, T):
-    """Pull back: our plane is one of a formation; bombers loom out of the clouds ahead. (1940 caption)"""
-    battle_sky(ctx, T, scroll=u * 200, bombers=(1150 - u * 60, 300, 170, 6), traffic=0.6, near=False)
+    """Pull back: our plane is one of a formation; bombers loom out of the clouds ahead. (1940 caption)
+    Starts in the same pose as the transformation shot (climbing), then levels off."""
+    pitch = 0.12 + 0.28 * (1 - ease(u * 2.2))
+    ctx.push_group()
+    battle_sky(ctx, T, scroll=u * 200, bombers=(1150 - u * 60, 300, 170, 6), traffic=0.6, near=False,
+               traffic_alpha=ease((u - 0.1) / 0.4))
+    ctx.pop_group_to_source(); ctx.paint()
     for i, (dx, dy, s) in enumerate(((0, 0, 190), (-230, 90, 150), (-420, 170, 120))):
-        A.aircraft(ctx, "spitfire", 700 + dx + u * 60, 610 + dy + 5 * math.sin(T * 2 + i), s, pitch=0.12,
+        if i and u < 0.15:
+            continue
+        A.aircraft(ctx, "spitfire", 700 + dx + u * 60, 610 + dy + 5 * math.sin(T * 2 + i), s, pitch=pitch,
                    prop_t=T + i, light=RED_LIGHT, light_amt=0.45, haze="#b3483a", haze_amt=0.12 * i)
 
 
@@ -492,12 +513,13 @@ def shot_wing_guns(ctx, u, T, firing=True):
 
 def shot_break_cloud(ctx, u, T):
     """The Spitfire punches out of the cloud top into open red sky."""
-    battle_sky(ctx, T, smoke=True, flak_n=6, seed=9)
-    A.aircraft(ctx, "spitfire", 500 + u * 900, 700 - u * 350, 340, pitch=0.35, prop_t=T,
+    battle_sky(ctx, T, smoke=True, flak_n=6, seed=9, near=False)
+    k = ease(u * 1.3)
+    A.aircraft(ctx, "spitfire", 560 + u * 800, 640 - k * 330, 340, pitch=0.42 - 0.2 * u, prop_t=T,
                light=RED_LIGHT, light_amt=0.45)
-    # cloud tearing past in the foreground
+    # the cloud top it bursts out of drops away fast below
     for i in range(4):
-        L.cumulus_rich(ctx, 300 + i * 420 - u * 900, 1000 - i * 30 + u * 250, 800, RED_TONES, 80 + i, a=0.97, t=T)
+        L.cumulus_rich(ctx, 250 + i * 430 - u * 700, 960 - i * 25 + k * 420, 820, RED_TONES, 80 + i, a=0.97, t=T)
 
 
 def shot_chase(ctx, u, T, hit_wingman=0.0):
@@ -527,7 +549,7 @@ def shot_attack(ctx, u, T):
 
 def shot_hit(ctx, u, T):
     """Tracers rake our own Spitfire: sparks, holes, a jolt."""
-    battle_sky(ctx, T, scroll=u * 200, smoke=True, flak_n=6, seed=15, traffic=0.6)
+    battle_sky(ctx, T, scroll=u * 200, smoke=True, flak_n=6, seed=15, traffic=0.6, near=False)
     jolt = 14 * math.exp(-u * 6) * math.sin(T * 60)
     if u > 0.2:
         streaming(ctx, T, (960, 540), 0.05 + 0.1 * u, 900, nose=520 * 0.42, size=520, life=0.9,
@@ -583,7 +605,7 @@ def shot_tree(ctx, u, T):
     A.aircraft(ctx, "spitfire", px, py, 360, pitch=-0.12, prop_t=T * 0.3, damage=1.0,
                light=RED_LIGHT, light_amt=0.25)
     fx.flames(ctx, ex, ey + 10, 44, 58, T, seed=98)
-    L.oak_tree(ctx, 1250 - u * 1300, 1750, 1100, mix(KENT["oak"], "#140808", redness), seed=7, t=T, wind=3.0)
+    L.oak_tree(ctx, 1500 - u * 1500, H + 150, 780, mix(KENT["oak"], "#140808", redness), seed=7, t=T, wind=3.0)
 
 
 def shot_cockpit_fall(ctx, u, T):

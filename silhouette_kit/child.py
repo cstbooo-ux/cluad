@@ -192,9 +192,13 @@ def child(ctx, x, gy, h, phase, run=1.0, throw=None, c="#000000", reach=None, lo
     el, fa = run_arm(far_q)
     arm(el, fa)
     if reach is not None:
-        a_up = 0.25 + 0.6 * reach if not hold else 0.5
+        if hold:                                       # holding the plane in front of the chest
+            a_up = 0.3 + 0.45 * reach
+            fore = a_up + 0.2 + 0.95 * (1 - reach)
+        else:
+            a_up = 0.25 + 0.6 * reach
+            fore = a_up + 0.15
         el = bone_pt(shoulder, a_up, La, 0)
-        fore = a_up + (0.15 if not hold else 1.3)
     elif throw is None:
         el, fore = run_arm(phase)
     else:

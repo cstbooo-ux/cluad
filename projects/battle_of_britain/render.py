@@ -43,7 +43,7 @@ def lin(t, t0, t1):
 
 
 # ------------------------------------------------------------------ shots
-PLANE = dict(plane_xy=(820, 560), size=260, pitch=0.38)
+PLANE = dict(plane_xy=(1180, 450), size=260, pitch=0.38)
 
 
 from silhouette_kit.child import run_travel
@@ -89,14 +89,18 @@ def throw_end_pose():
     return _THROW_END
 
 
-def follow_shot(ctx, t):
-    u = lin(t, 5.71, DROP)
+def follow_params(t):
+    """One camera for the whole ride: pitch up (tilt) + climb, continuous pan, plane caught up to its mark."""
     x0, y0, s0, p0 = throw_end_pose()
     q = ease(lin(t, 5.71, 6.5))                                 # camera catches up with the plane
-    xy = (x0 + (PLANE["plane_xy"][0] - x0) * q, y0 + (PLANE["plane_xy"][1] - y0) * q)
-    S.shot_follow_plane(ctx, u, t, redness=ease((t - 7.0) / 6.0), drop=1100 * ease((t - 5.71) / 5.0),
-                        plane_xy=xy, size=s0 + (PLANE["size"] - s0) * q, pitch=p0 + (PLANE["pitch"] - p0) * q,
-                        pan=follow_pan(t))
+    return dict(redness=ease((t - 7.0) / 6.0),
+                tilt=520 * ease((t - 5.71) / 4.5), climb=900 * ease((t - 5.71) / 6.5),
+                plane_xy=(x0 + (PLANE["plane_xy"][0] - x0) * q, y0 + (PLANE["plane_xy"][1] - y0) * q),
+                size=s0 + (PLANE["size"] - s0) * q, pitch=p0 + (PLANE["pitch"] - p0) * q, pan=follow_pan(t))
+
+
+def follow_shot(ctx, t):
+    S.shot_follow_plane(ctx, lin(t, 5.71, DROP), t, **follow_params(t))
 
 
 def cut_shot(ctx, t):
@@ -106,7 +110,7 @@ def cut_shot(ctx, t):
         A.aircraft(ctx, "spitfire", x, y + 6 * math.sin(t * 2.3), PLANE["size"],
                    pitch=PLANE["pitch"] + 0.03 * math.sin(t * 1.7), livery=None, c="#000000", markings=False)
         return
-    S.shot_cut_spitfire(ctx, lin(t, DROP, beat(1)), t, **PLANE)
+    S.shot_cut_spitfire(ctx, lin(t, DROP, beat(1)), t, **follow_params(t))
 
 
 def hit_shot(ctx, t):
@@ -135,9 +139,10 @@ TL = [
     (0.0, 4.6, run_shot, dict()),
     (4.6, 5.71, throw_shot, dict(zoom=(1.0, 1.06))),
     (5.71, DROP, follow_shot, dict(zoom=(1.0, 1.0), center=PLANE["plane_xy"], shake=1.0)),
-    (DROP, beat(1), cut_shot, dict(center=PLANE["plane_xy"], shake=3.0)),
+    (DROP, beat(1), cut_shot, dict(center=PLANE["plane_xy"], anchor=(1010, 560), zoom=(1.0, 1.9), zoom_out=True,
+                                    shake=3.0)),
     (beat(1), beat(4), lambda c, t: S.shot_formation(c, lin(t, beat(1), beat(4)), t),
-     dict(zoom=(1.45, 1.0), center=(700, 610), shake=2.5, zoom_ease=True)),
+     dict(zoom=(2.6, 1.0), center=(700, 610), anchor0=(1010, 560), shake=2.5, zoom_ease=True)),
     (beat(4), beat(6), lambda c, t: S.shot_cockpit(c, lin(t, beat(4), beat(6)), t, jaw=0.4 + 0.6 * lin(t, beat(4), beat(5))),
      dict(zoom=(1.0, 1.08), shake=3.0)),
     (beat(6), beat(7), lambda c, t: S.shot_stick(c, 0, t, squeeze=ease(lin(t, beat(6), beat(6) + 0.3))),
@@ -153,7 +158,8 @@ TL = [
     (beat(17), beat(19), hit_shot, dict(shake=6.0)),
     (beat(19), beat(22), lambda c, t: S.shot_falling(c, 0.5 * lin(t, beat(19), beat(22)), t), dict(shake=5.0, roll=(0.0, 0.05))),
     (beat(22), beat(24), lambda c, t: S.shot_cockpit_fall(c, lin(t, beat(22), beat(24)), t), dict(shake=6.0, zoom=(1.0, 1.1))),
-    (beat(24), beat(27), lambda c, t: S.shot_falling(c, 0.5 + 0.5 * lin(t, beat(24), beat(27)), t), dict(shake=7.0, roll=(0.05, 0.1))),
+    (beat(24), beat(27), lambda c, t: S.shot_falling(c, 0.5 + 0.5 * lin(t, beat(24), beat(27)), t),
+     dict(shake=7.0, roll=(0.05, 0.1), zoom=(1.7, 1.9), center=(930, 490), anchor=(960, 560))),
     (beat(27), beat(29), lambda c, t: S.shot_tree(c, lin(t, beat(27), beat(29)), t), dict(shake=8.0)),
     (beat(29), beat(30), lambda c, t: S.shot_cockpit_fall(c, 1.0, t), dict(shake=10.0, zoom=(1.08, 1.18))),
     (beat(30), END, lambda c, t: S.shot_falling(c, 1.0 + 0.3 * lin(t, beat(30), END), t),
@@ -189,10 +195,16 @@ def camera(t, i):
     t0, t1, _, cam = TL[i]
     u = lin(t, t0, t1)
     z0, z1 = cam.get("zoom", (1.0, 1.0))
-    z = z0 + (z1 - z0) * (ease(u) if cam.get("zoom_ease") else u)
+    ku = ease(u) if cam.get("zoom_ease") else (1 - (1 - u) ** 3 if cam.get("zoom_out") else u)
+    z = z0 + (z1 - z0) * ku
     r0, r1 = cam.get("roll", (0.0, 0.0))
     roll = r0 + (r1 - r0) * u
     cx, cy = cam.get("center", (W / 2, H / 2))
+    ax, ay = cx, cy                                          # screen point the world `center` is pinned to
+    if "anchor" in cam:
+        ax, ay = cx + (cam["anchor"][0] - cx) * ku, cy + (cam["anchor"][1] - cy) * ku
+    if "anchor0" in cam:
+        ax, ay = cam["anchor0"][0] + (cx - cam["anchor0"][0]) * ku, cam["anchor0"][1] + (cy - cam["anchor0"][1]) * ku
     amp = cam.get("shake", 0.0)
     if 11.0 < t < DROP:                                      # buffeting builds toward the transformation
         amp += 9.0 * ((t - 11.0) / (DROP - 11.0)) ** 1.5
@@ -214,16 +226,16 @@ def camera(t, i):
         z += 0.012 * math.exp(-dt / 0.08)
     sx = amp * (math.sin(t * 91.3) * 0.6 + math.sin(t * 57.1 + 1.3) * 0.4)
     sy = amp * (math.cos(t * 83.7) * 0.6 + math.sin(t * 41.9 + 0.7) * 0.4)
-    return z, roll, (cx, cy), (sx, sy), flash, fcol, chroma
+    return z, roll, (cx, cy), (ax, ay), (sx, sy), flash, fcol, chroma
 
 
 def render_frame(fi):
     t = fi / FPS
     i = shot_at(t)
-    z, roll, (cx, cy), (sx, sy), flash, fcol, chroma = camera(t, i)
+    z, roll, (cx, cy), (ax, ay), (sx, sy), flash, fcol, chroma = camera(t, i)
     s, ctx = new_canvas()
     ctx.save()
-    ctx.translate(cx + sx, cy + sy); ctx.rotate(roll); ctx.scale(z, z); ctx.translate(-cx, -cy)
+    ctx.translate(ax + sx, ay + sy); ctx.rotate(roll); ctx.scale(z, z); ctx.translate(-cx, -cy)
     TL[i][2](ctx, t)
     ctx.restore()
     impact_frame = 0 <= t - DROP < 2.5 / FPS or 0 <= t - beat(17) < 2.5 / FPS
