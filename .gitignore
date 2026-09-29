@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+# render outputs (regenerate with render.py)
+projects/*/out/
+projects/*/stills/scene_*_A.png
+projects/*/stills/scene_*_B.png
