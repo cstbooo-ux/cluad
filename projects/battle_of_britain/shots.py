@@ -107,18 +107,18 @@ def shot_kent_run(ctx, u, T, boy_x=None, pan=0.0):
     L.grass(ctx, H - 40, -100, W + 100, 70, KENT["fg"], seed=9, t=T, density=12)
 
 
-def shot_kent_throw(ctx, u, T, pan=700.0):
-    """Boy on the hillock throws; the plane leaves his hand at u ~ 0.5."""
+def shot_kent_throw(ctx, u, T, pan=700.0, k=None, fly=0.0):
+    """Boy on the hillock throws; the plane leaves his hand at k = 0.5. fly: 0..1 plane flight after release."""
     kent_background(ctx, pan, T)
     kent_ground(ctx, pan, T)
     xw = 1880
-    k = min(1.0, u * 1.2)
+    k = min(1.0, u * 1.2) if k is None else k
     r = child(ctx, xw - pan, ground_y(xw) + 4, 250, 0.0, throw=k)
     if k < 0.5:
         A.paper_plane(ctx, r["hand"][0], r["hand"][1] - 6, 58, pitch=0.5)
     else:
-        q = (k - 0.5) / 0.5
-        A.paper_plane(ctx, r["hand"][0] + q * 420, r["hand"][1] - 20 - q * 260, 58 + q * 30, pitch=0.42)
+        q = max((k - 0.5) / 0.5, fly)
+        A.paper_plane(ctx, r["hand"][0] + q * 520, r["hand"][1] - 20 - q * 300, 58 + q * 40, pitch=0.42)
     L.grass(ctx, H - 40, -100, W + 100, 70, KENT["fg"], seed=9, t=T, density=12)
 
 
@@ -508,7 +508,10 @@ def shot_ending_grass(ctx, u, T, pick=0.0):
     L.grass(ctx, 900, -100, W + 100, 90, "#3a3420", seed=110, t=T, density=10)
     gy = 960
     px, py = 1000, gy - 14
-    if pick < 0.3:                                   # the plane alone in the grass, the boy running in
+    if pick < 0.05:                                  # the paper plane glides down into the grass
+        q = ease(pick / 0.05)
+        A.paper_plane(ctx, 300 + (px - 300) * q, 520 + (py - 520) * q ** 1.4, 170, pitch=0.12 - 0.18 * q)
+    elif pick < 0.3:                                 # the plane alone in the grass, the boy running in
         A.paper_plane(ctx, px, py, 170, pitch=-0.06)
         if pick > 0.05:
             q = (pick - 0.05) / 0.25
