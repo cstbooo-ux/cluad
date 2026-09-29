@@ -88,6 +88,8 @@ def text_mask(s, font, size, spacing=0):
 
 @functools.lru_cache(maxsize=512)
 def math_mask(tex, px):
+    if not tex.strip(" \\,"):
+        return None
     buf = io.BytesIO()
     mathtext.math_to_image("$" + tex + "$", buf, dpi=100, format="png",
                            prop=FontProperties(size=px * 72 / 100, math_fontfamily="cm"))
@@ -679,7 +681,7 @@ def genf(cv, t):
         terms = ["1", "+\\,x", "+\\,2x^2", "+\\,3x^3", "+\\,5x^4", "+\\,8x^5", "+\\,13x^6", "+\\,21x^7", "+\\,\\cdots"]
         k = int(clamp((t - 97.2) / .3 + 1, 0, len(terms)))
         coll = eio((t - 100.3) / .5)
-        tex = "".join(terms[:k]) if k else "\\,"
+        tex = "".join(terms[:k])
         cv.math(tex, CX, 430 + 40 * coll, 76, WHITE, a * (1 - .5 * coll))
         cv.text("斐波那契：1, 1, 2, 3, 5, 8, 13, 21 …", CX, 300, 40, "sans", GOLD, a * ss(97, 97.4, t), spacing=3)
         if t >= 100.1:
@@ -855,7 +857,7 @@ def render_chunk(args):
     i0, i1, path = args
     p = subprocess.Popen([ffmpeg(), "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
                           "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-preset", "slow",
-                          "-crf", "19", "-maxrate", "7M", "-bufsize", "14M", "-tune", "film",
+                          "-crf", "20", "-maxrate", "4.3M", "-bufsize", "8.6M", "-tune", "film",
                           "-pix_fmt", "yuv420p", "-g", "60", path], stdin=subprocess.PIPE)
     for i in range(i0, i1):
         p.stdin.write(render(i / FPS, i).tobytes())
