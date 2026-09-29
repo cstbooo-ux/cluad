@@ -33,15 +33,95 @@ def lay(ctx, S, f):
         ctx.restore()
 
 
+def contact_shadow(ctx, x, y, w, a=0.45):
+    g = cairo.RadialGradient(0, 0, 0, 0, 0, 1)
+    g.add_color_stop_rgba(0, 0, 0, 0, a); g.add_color_stop_rgba(0.6, 0, 0, 0, a * 0.5); g.add_color_stop_rgba(1, 0, 0, 0, 0)
+    ctx.save(); ctx.translate(x, y); ctx.scale(w, w * 0.09)
+    ctx.arc(0, 0, 1, 0, TAU); ctx.restore(); ctx.set_source(g); ctx.fill()
+
+
 def hero(ctx, S):
     f = S.fig
+    contact_shadow(ctx, FIG_X + 15, GY + 3, 120)
     figure(ctx, FIG_X, GY, FIG_H, S.phase, f.get("kind", "civ"), run=f.get("run", 0.0),
            charge=f.get("charge", False), suitcase=f.get("suitcase", True))
+    foreground(ctx, S)
+
+
+FGC = "#040304"
+
+
+def foreground(ctx, S):
+    """Closest parallax layer (moves 1.7x the ground) that sweeps across in front of the hero."""
+    sc, B, t = S.scene, S.B, S.t
+    c = FGC
+    with lay(ctx, S, 1.7):
+        if sc == "prologue":
+            P.grass_clump(ctx, 140, H + 10, 340, c, 1, t)
+            P.fence_post(ctx, 1200, H + 40, 440, c, span=520)
+            P.grass_clump(ctx, 1800, H + 10, 380, c, 2, t)
+        elif sc == "paris":
+            P.street_lamp(ctx, 1220, H + 60, 1.9, c)
+            P.bollard(ctx, 200, H + 30, 260, c)
+        elif sc == "station":
+            P.pillar(ctx, 1260, 300, 90, c)
+            P.luggage(ctx, 170, H + 20, 340, c)
+        elif sc == "london":
+            ctx.save(); ctx.translate(-80, H + 20); ctx.scale(1.8, 1.8)
+            P.sandbags(ctx, 0, 0, 380, 4, c); ctx.restore()
+            P.street_lamp(ctx, 1340, H + 60, 1.9, c)
+        elif sc == "berlin":
+            P.rubble(ctx, 960, 1560, H + 40, 320, c, seed=201)
+        elif sc == "stalingrad":
+            P.fence_post(ctx, 1150, H + 40, 420, c, span=500)
+        elif sc == "moscow":
+            czech_hedgehog(ctx, 1260, H + 90, 480, c)
+            P.boulder(ctx, 130, H + 40, 300, "#dfe6ea", 202)
+        elif sc == "warship":
+            P.bollard(ctx, 1170, H + 20, 280, c)
+            P.rope_coil(ctx, 240, H + 10, 360, c)
+        elif sc == "carrier":
+            P.drum(ctx, 1170, H + 20, 250, c); P.drum(ctx, 1330, H + 20, 250, c)
+            P.crate(ctx, 200, H + 20, 320, c)
+        elif sc == "desert":
+            P.jerrycan(ctx, 1150, H + 20, 230, c); P.jerrycan(ctx, 1320, H + 20, 230, c)
+            P.boulder(ctx, 150, H + 40, 300, c, 203)
+            P.grass_clump(ctx, 1840, H + 10, 300, c, 3, t)
+        elif sc == "jungle":
+            P.fern(ctx, 1180, H + 60, 560, c, t)
+            P.fern(ctx, 80, H + 60, 480, c, t)
+        elif sc == "normandy":
+            czech_hedgehog(ctx, 1260, H + 120, 540, c)
+            line(ctx, [(260, H + 40), (400, H - 330)], c, 26)
+        elif sc == "mountains":
+            P.boulder(ctx, 1200, H + 40, 280, c, 204)
+            P.grass_clump(ctx, 180, H + 10, 360, c, 4, t)
+        elif sc == "airfield":
+            for k in range(3):
+                P.drum(ctx, 1120 + k * 165, H + 20, 240, c)
+            P.grass_clump(ctx, 1840, H + 10, 340, c, 5, t)
+        elif sc == "trench":
+            ctx.save(); ctx.translate(1300, H + 20); ctx.scale(1.8, 1.8)
+            P.sandbags(ctx, 0, 0, 420, 3, c); ctx.restore()
+            if not B:
+                P.fence_post(ctx, 1060, H + 40, 420, c, span=460)
+        elif sc == "airbattle":
+            P.grass_clump(ctx, 180, H + 10, 360, c, 6, t)
+            P.fence_post(ctx, 1180, H + 40, 420, c, span=500)
+        elif sc == "dawn":
+            P.rubble(ctx, 1500, 2100, H + 40, 230, c, seed=205)
 
 
 def ground(ctx, S, c, y=GY, kind="plain", seed=0, detail_c=None):
     rect(ctx, -10, y, W + 20, H - y + 10, c)
     dc = detail_c or c
+    if kind == "plain":
+        off = S.scroll % 300
+        for k in range(-1, 9):
+            rr = random.Random(seed * 17 + (k + int(S.scroll // 300)) * 13)
+            for _ in range(4):
+                ellipse(ctx, k * 300 - off + rr.uniform(0, 300), y + rr.uniform(6, 60), rr.uniform(4, 12), rr.uniform(2, 4),
+                        mix(c, "#ffffff", 0.06))
     if kind == "rubble":
         off = S.scroll % 400
         for k in range(-1, 7):

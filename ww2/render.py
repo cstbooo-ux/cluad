@@ -1,8 +1,8 @@
-"""Timeline + renderer for the 105 BPM silhouette video.
+"""Timeline + renderer for the 106 BPM silhouette video.
 
 python3 render.py sheets            -> stills/scenes_A.png, stills/scenes_B.png (all scenes, for review)
-python3 render.py video [out_dir]   -> ww2_105bpm.mp4 (silent), ww2_105bpm_click.mp4 (with metronome),
-                                       click_105bpm.wav, cut_sheet.md
+python3 render.py video [out_dir]   -> ww2_106bpm.mp4 (silent), ww2_106bpm_click.mp4 (with metronome),
+                                       click_106bpm.wav, cut_sheet.md
 python3 render.py frame <sec>       -> single frame png, for spot checks
 """
 import math, os, sys, subprocess, wave
@@ -13,12 +13,12 @@ from PIL import Image
 import imageio_ffmpeg
 
 from lib import W, H, FIG_H, new_canvas, post, rect
-from figure import stride
+from figure import travel
 from scenes import SCENES
 import fx
 
 D = os.path.dirname(os.path.abspath(__file__))
-BPM = 105
+BPM = 106
 BEAT = 60 / BPM
 FPS = 30
 NB = 72
@@ -66,6 +66,7 @@ class Shot:
     B: int
     scroll: float
     var: int
+    scene: str = ""
     post: dict = field(default_factory=dict)
 
 
@@ -87,8 +88,9 @@ def render_frame(fi):
     t0 = beat_frame(b0) / FPS
     ts = tg - t0
     ph = fig_phase(tg, fig)
-    sp = stride(FIG_H, fig.get("run", 0.0), fig.get("charge", False))
-    S = Shot(t=ts, phase=ph, fig=fig, B=B, scroll=sp * (ph - fig_phase(t0, fig)), var=VARS[i])
+    ga = (FIG_H, fig.get("run", 0.0), fig.get("charge", False), fig.get("kind", "civ"))
+    S = Shot(t=ts, phase=ph, fig=fig, B=B, scroll=travel(ph, *ga) - travel(fig_phase(t0, fig), *ga), var=VARS[i],
+             scene=scene)
 
     beat_idx = int(tg / BEAT + 1e-6)
     tb = tg - beat_idx * BEAT                 # time since the last beat
@@ -138,7 +140,8 @@ def _render_bytes(fi):
 
 
 # ------------------------------------------------------------------ audio / sheets
-def click_track(path, dur=DUR, sr=48000):
+def click_track(path, dur=None, sr=48000):
+    dur = DUR if dur is None else dur
     n = int(dur * sr)
     a = np.zeros(n, np.float32)
     for k in range(NB):
@@ -179,7 +182,7 @@ def sheets(out):
         thumbs = []
         for k, sc in enumerate(lst):
             fig = CIV if not B else SOL
-            S = Shot(t=0.35, phase=0.02 + 0.5 * (k % 2), fig=fig, B=B, scroll=0.0, var=0)
+            S = Shot(t=0.35, phase=0.02 + 0.5 * (k % 2), fig=fig, B=B, scroll=0.0, var=0, scene=sc)
             s, ctx = new_canvas()
             SCENES[sc](ctx, S)
             img = post(s, seed=k)
@@ -197,9 +200,28 @@ def sheets(out):
         print("wrote", name)
 
 
+def audio(out):
+    import soundtrack as st
+    os.makedirs(out, exist_ok=True)
+    stems = st.build(SHOTS, VARS, BEAT, NB, DUR, beat_frame, FPS)
+    mix, scaled = st.master(stems)
+    st.write_wav(os.path.join(out, "sfx_mix.wav"), mix)
+    for k, v in scaled.items():
+        st.write_wav(os.path.join(out, f"sfx_{k}.wav"), v)
+    click_track(os.path.join(out, f"click_{BPM}bpm.wav"))
+    # SFX + metronome, for checking the sync
+    import wave
+    with wave.open(os.path.join(out, f"click_{BPM}bpm.wav")) as w:
+        c = np.frombuffer(w.readframes(w.getnframes()), np.int16).astype(np.float32) / 32767
+    both = mix * 0.7
+    both[: len(c)] += np.stack([c, c], 1)[: len(both)] * 0.8
+    st.write_wav(os.path.join(out, "sfx_with_click.wav"), both / max(1.0, np.max(np.abs(both)) / 0.95))
+    return mix
+
+
 def video(out):
     os.makedirs(out, exist_ok=True)
-    silent = os.path.join(out, "ww2_105bpm.mp4")
+    silent = os.path.join(out, f"ww2_{BPM}bpm.mp4")
     exe = imageio_ffmpeg.get_ffmpeg_exe()
     p = subprocess.Popen([exe, "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}",
                           "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-preset", "slow", "-crf", "21",
@@ -210,10 +232,10 @@ def video(out):
             if k % 100 == 0:
                 print("frame", k, "/", NF, flush=True)
     p.stdin.close(); p.wait()
-    wav = os.path.join(out, "click_105bpm.wav")
-    click_track(wav)
-    subprocess.run([exe, "-y", "-loglevel", "error", "-i", silent, "-i", wav, "-c:v", "copy", "-c:a", "aac",
-                    "-b:a", "160k", "-shortest", os.path.join(out, "ww2_105bpm_click.mp4")], check=True)
+    audio(out)
+    for wav, name in (("sfx_mix.wav", f"ww2_{BPM}bpm_sfx.mp4"), ("sfx_with_click.wav", f"ww2_{BPM}bpm_sfx_click.mp4")):
+        subprocess.run([exe, "-y", "-loglevel", "error", "-i", silent, "-i", os.path.join(out, wav), "-c:v", "copy",
+                        "-c:a", "aac", "-b:a", "192k", "-shortest", os.path.join(out, name)], check=True)
     cut_sheet(os.path.join(out, "cut_sheet.md"))
     print("done", NF, "frames")
 
@@ -222,6 +244,8 @@ if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "video"
     if cmd == "sheets":
         out = os.path.join(D, "stills"); os.makedirs(out, exist_ok=True); sheets(out)
+    elif cmd == "audio":
+        audio(sys.argv[2] if len(sys.argv) > 2 else os.path.join(D, "out"))
     elif cmd == "frame":
         sec = float(sys.argv[2])
         Image.fromarray(render_frame(int(sec * FPS))).save(sys.argv[3] if len(sys.argv) > 3 else "frame.png")

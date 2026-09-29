@@ -664,3 +664,105 @@ def windsock(ctx, x, base, h, c, t=0.0):
     fl = 0.12 * math.sin(t * 6)
     fill_poly(ctx, [(x, base - h - 14), (x + 0.5 * h, base - h - 4 + fl * 40), (x + 0.5 * h, base - h + 4 + fl * 40),
                     (x, base - h + 14)], c)
+
+
+# ================================================================ foreground occluders (closest parallax layer)
+def grass_clump(ctx, x, base, h, c, seed, t=0.0):
+    rnd = random.Random(seed)
+    for _ in range(int(h / 6)):
+        bx = x + rnd.uniform(-h * 0.5, h * 0.5)
+        hh = h * rnd.uniform(0.4, 1.0)
+        lean = rnd.uniform(-0.35, 0.35) + 0.05 * math.sin(t * 2 + bx)
+        tip = (bx + math.sin(lean) * hh, base - math.cos(lean) * hh)
+        fill_poly(ctx, [(bx - 4, base + 2), ((bx + tip[0]) / 2 + lean * 10, (base + tip[1]) / 2), tip, (bx + 4, base + 2)], c)
+
+
+def fence_post(ctx, x, base, h, c, wire=True, span=420):
+    ctx.save(); ctx.translate(x, base); ctx.rotate(0.06)
+    rect(ctx, -9, -h, 18, h + 20, c)
+    fill_poly(ctx, [(-9, -h), (0, -h - 14), (9, -h)], c)
+    ctx.restore()
+    if wire:
+        for k, dy in enumerate((0.25, 0.5, 0.75)):
+            pts = [(x + span * q / 10 - span, base - h * dy + 18 * math.sin(math.pi * q / 10)) for q in range(11)]
+            line(ctx, pts, c, 2)
+            pts = [(x + span * q / 10, base - h * dy + 18 * math.sin(math.pi * q / 10)) for q in range(11)]
+            line(ctx, pts, c, 2)
+            for q in range(1, 10, 2):         # barbs
+                px, py = pts[q]
+                line(ctx, [(px - 5, py - 5), (px + 5, py + 5)], c, 1.5)
+
+
+def sandbags(ctx, x, base, w, rows, c):
+    bh = 34
+    for r in range(rows):
+        n = int(w / 90) - (r % 2)
+        off = (r % 2) * 45
+        for k in range(n):
+            ellipse(ctx, x + off + k * 90 + 45, base - bh * r - bh / 2, 50, bh / 2 + 3, c)
+
+
+def crate(ctx, x, base, s, c):
+    rect(ctx, x - s / 2, base - s, s, s, c)
+    rect(ctx, x - s / 2 - 4, base - s - 4, s + 8, 8, c)
+
+
+def drum(ctx, x, base, s, c):
+    rect(ctx, x - s * 0.33, base - s, s * 0.66, s, c)
+    for y in (0.0, 0.33, 0.66, 1.0):
+        rect(ctx, x - s * 0.36, base - s * y - 3, s * 0.72, 6, c)
+
+
+def bollard(ctx, x, base, s, c):
+    rect(ctx, x - s * 0.22, base - s * 0.8, s * 0.44, s * 0.8, c)
+    ellipse(ctx, x, base - s * 0.82, s * 0.34, s * 0.12, c)
+    rect(ctx, x - s * 0.5, base - s * 0.55, s, s * 0.1, c)
+
+
+def rope_coil(ctx, x, base, s, c):
+    for k in range(4):
+        ellipse(ctx, x, base - k * s * 0.09 - s * 0.05, s * (0.5 - k * 0.04), s * 0.07, c)
+
+
+def boulder(ctx, x, base, s, c, seed):
+    rnd = random.Random(seed)
+    pts = [(x - s, base + 10)]
+    for k in range(9):
+        a = math.pi + k / 8 * math.pi
+        pts.append((x + math.cos(a) * s * rnd.uniform(0.8, 1.1), base + math.sin(a) * s * 0.7 * rnd.uniform(0.7, 1.1)))
+    pts.append((x + s, base + 10))
+    fill_poly(ctx, pts, c)
+
+
+def fern(ctx, x, base, s, c, t=0.0):
+    for j in range(9):
+        ang = -math.pi / 2 + (j - 4) * 0.3 + 0.04 * math.sin(t * 1.5 + j)
+        L = s * (0.7 + 0.3 * math.cos((j - 4) * 0.5))
+        spine = [(x + math.cos(ang) * L * q / 8 + (L * 0.15 * (q / 8) ** 2) * (1 if ang > -math.pi / 2 else -1),
+                  base + math.sin(ang) * L * q / 8 + L * 0.35 * (q / 8) ** 2) for q in range(9)]
+        line(ctx, spine, c, 4)
+        for q in range(1, 8):
+            px, py = spine[q]
+            lw = s * 0.09 * (1 - q / 9)
+            ellipse(ctx, px, py, lw, lw * 0.35, c, rot=ang + 1.2)
+            ellipse(ctx, px, py, lw, lw * 0.35, c, rot=ang - 1.2)
+
+
+def pillar(ctx, x, top, w, c):
+    rect(ctx, x - w / 2, top, w, H - top + 20, c)
+    rect(ctx, x - w / 2 - 10, top + 40, w + 20, 16, c)
+    for k in range(4):
+        rect(ctx, x - w / 2 - 4, top + 140 + k * 150, w + 8, 6, c)
+
+
+def luggage(ctx, x, base, s, c):
+    rect(ctx, x - s * 0.6, base - s * 0.4, s * 1.2, s * 0.4, c)
+    rect(ctx, x - s * 0.45, base - s * 0.72, s * 0.9, s * 0.32, c)
+    rect(ctx, x - s * 0.25, base - s * 0.9, s * 0.5, s * 0.18, c)
+    ctx.new_path(); ctx.arc(x, base - s * 0.9, s * 0.08, math.pi, TAU); ctx.set_line_width(4); src(ctx, c); ctx.stroke()
+
+
+def jerrycan(ctx, x, base, s, c):
+    rect(ctx, x - s * 0.35, base - s, s * 0.7, s, c)
+    rect(ctx, x - s * 0.3, base - s * 1.12, s * 0.2, s * 0.14, c)
+    ctx.new_path(); ctx.arc(x + s * 0.1, base - s, s * 0.14, math.pi, TAU); ctx.set_line_width(5); src(ctx, c); ctx.stroke()

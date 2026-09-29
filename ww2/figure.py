@@ -141,17 +141,7 @@ def figure(ctx, x, gy, h, phase, kind="civ", run=0.0, c="#000000", charge=False,
     bob = 0.006 * u * math.cos(TAU * phase * 2)
 
     # ---- legs
-    legs = []
-    for s in (0, 1):
-        ph = TAU * phase + s * math.pi + math.pi / 2
-        sn = math.sin(ph)
-        thigh = A * sn + lean * 0.35
-        flex = 0.07 + (0.8 + 0.9 * run) * max(0.0, math.cos(ph - 0.5)) ** 2
-        shin = thigh - flex
-        pitch = 0.6 * max(0.0, -sn) ** 3 * (1 if math.cos(ph) < 0.4 else 0.7) - 0.22 * max(0.0, sn) ** 4
-        pitch += 0.25 * run * max(0.0, math.cos(ph))
-        knee = bone_pt(hip, thigh, L1, 0); ankle = bone_pt(knee, shin, L2, 0)
-        legs.append((thigh, shin, knee, ankle, pitch))
+    legs = leg_state(phase, u, run, charge, hip)
     prof = LEG_PROF["sol" if kind == "sol" else "civ"]
     shoe = BOOT if kind == "sol" else OXFORD
     shoe_pts = []
@@ -284,3 +274,64 @@ def stride(u, run=0.0, charge=False):
         flex = 0.07 + (0.8 + 0.9 * run) * max(0.0, math.cos(ph - 0.5)) ** 2
         return L1 * math.sin(thigh) + L2 * math.sin(thigh - flex)
     return 2 * (ankle_x(0.0) - ankle_x(0.5))
+
+
+
+def leg_state(phase, u, run=0.0, charge=False, hip=(0.0, 0.0)):
+    """(thigh, shin, knee, ankle, pitch) for both legs, hip at `hip` (before dropping to the ground)."""
+    A = 0.34 + 0.28 * run
+    lean = 0.04 + 0.2 * run + (0.08 if charge else 0)
+    L1, L2 = 0.25 * u, 0.245 * u
+    legs = []
+    for s in (0, 1):
+        ph = TAU * phase + s * math.pi + math.pi / 2
+        sn = math.sin(ph)
+        thigh = A * sn + lean * 0.35
+        flex = 0.07 + (0.8 + 0.9 * run) * max(0.0, math.cos(ph - 0.5)) ** 2
+        shin = thigh - flex
+        pitch = 0.6 * max(0.0, -sn) ** 3 * (1 if math.cos(ph) < 0.4 else 0.7) - 0.22 * max(0.0, sn) ** 4
+        pitch += 0.25 * run * max(0.0, math.cos(ph))
+        knee = bone_pt(hip, thigh, L1, 0); ankle = bone_pt(knee, shin, L2, 0)
+        legs.append((thigh, shin, knee, ankle, pitch))
+    return legs
+
+
+def _shoes(phase, u, run, charge, kind):
+    shoe = BOOT if kind == "sol" else OXFORD
+    return [Frame(an[0], an[1], pitch, u).pts([(p[0], -p[1]) for p in shoe])
+            for _, _, _, an, pitch in leg_state(phase, u, run, charge)]
+
+
+_TRAVEL = {}
+
+
+def travel(phase, u, run=0.0, charge=False, kind="civ"):
+    """Cumulative ground distance at `phase`, derived from the sole point that is actually on the ground.
+
+    Scrolling the ground by this amount keeps the planted foot still (heel strike -> roll -> toe off)
+    instead of letting it slide, which is what made the walk look like it was floating.
+    """
+    key = (round(u, 3), run, charge, kind)
+    if key not in _TRAVEL:
+        N = 2000
+        cum = [0.0]
+        prev = _shoes(0.0, u, run, charge, kind)
+        for i in range(1, N + 1):
+            p = i / N
+            cur = _shoes(p, u, run, charge, kind)
+            low = max(max(q[1] for q in f) for f in prev)
+            # contact foot + sole point = the lowest one in the previous step
+            fi, j = max(((a, b) for a in range(2) for b in range(len(prev[a]))), key=lambda ab: prev[ab[0]][ab[1]][1])
+            dx = prev[fi][j][0] - cur[fi][j][0]
+            # vertical drop of the whole figure also changes which point is lowest; only count backward travel
+            cum.append(cum[-1] + max(0.0, dx))
+            prev = cur
+        _TRAVEL[key] = cum
+    cum = _TRAVEL[key]
+    N = len(cum) - 1
+    k = math.floor(phase)
+    f = (phase - k) * N
+    i = int(f)
+    frac = f - i
+    val = cum[i] + (cum[min(i + 1, N)] - cum[i]) * frac
+    return k * cum[-1] + val
