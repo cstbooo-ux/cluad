@@ -141,16 +141,16 @@ TL = [
     (5.71, DROP, follow_shot, dict(zoom=(1.0, 1.0), center=PLANE["plane_xy"], shake=1.0)),
     (DROP, beat(4), cut_shot, dict(center=PLANE["plane_xy"], push=(DROP, beat(1), beat(3)), shake=3.0)),
     (beat(4), beat(6), lambda c, t: S.shot_cockpit(c, lin(t, beat(4), beat(6)), t, jaw=0.4 + 0.6 * lin(t, beat(4), beat(5))),
-     dict(zoom=(1.0, 1.08), shake=3.0)),
+     dict(zoom=(1.0, 1.08), shake=5.0)),
     (beat(6), beat(7), lambda c, t: S.shot_stick(c, 0, t, squeeze=ease(lin(t, beat(6), beat(6) + 0.3))),
      dict(zoom=(1.12, 1.0), shake=2.5)),
     (beat(7), beat(8), lambda c, t: S.shot_wing_bank(c, 0, t, bank=0.2 + 0.6 * lin(t, beat(7), beat(8))),
-     dict(roll=(0.0, -0.08), shake=4.0)),
-    (beat(8), beat(9), lambda c, t: S.shot_gunsight(c, lin(t, beat(8), beat(9)), t), dict(zoom=(1.0, 1.1), shake=3.0)),
-    (beat(9), beat(10), lambda c, t: S.shot_wing_guns(c, lin(t, beat(9), beat(10)), t), dict(shake=9.0)),
-    (beat(10), beat(12), lambda c, t: S.shot_break_cloud(c, lin(t, beat(10), beat(12)), t), dict(zoom=(1.1, 1.0), shake=4.0)),
-    (beat(12), beat(14), lambda c, t: S.shot_chase(c, lin(t, beat(12), beat(14)), t), dict(zoom=(1.0, 1.08), shake=3.0)),
-    (beat(14), beat(16.5), lambda c, t: S.shot_attack(c, lin(t, beat(14), beat(16.5)), t), dict(roll=(0.05, -0.03), shake=4.0)),
+     dict(roll=(0.0, -0.08), shake=6.0)),
+    (beat(8), beat(9), lambda c, t: S.shot_gunsight(c, lin(t, beat(8), beat(9)), t), dict(zoom=(1.0, 1.1), shake=5.0)),
+    (beat(9), beat(10), lambda c, t: S.shot_wing_guns(c, lin(t, beat(9), beat(10)), t), dict(shake=11.0)),
+    (beat(10), beat(12), lambda c, t: S.shot_break_cloud(c, lin(t, beat(10), beat(12)), t), dict(zoom=(1.1, 1.0), shake=6.0)),
+    (beat(12), beat(14), lambda c, t: S.shot_chase(c, lin(t, beat(12), beat(14)), t), dict(zoom=(1.0, 1.08), shake=6.0)),
+    (beat(14), beat(16.5), lambda c, t: S.shot_attack(c, lin(t, beat(14), beat(16.5)), t), dict(roll=(0.05, -0.03), shake=6.0)),
     (beat(16.5), beat(17), lambda c, t: S.shot_cockpit(c, 0.5, t, jaw=0.2, look=0.12), dict(zoom=(1.04, 1.06), shake=1.0)),
     (beat(17), beat(19), hit_shot, dict(shake=6.0)),
     (beat(19), beat(22), lambda c, t: S.shot_falling(c, 0.5 * lin(t, beat(19), beat(22)), t), dict(shake=5.0, roll=(0.0, 0.05))),
@@ -231,6 +231,10 @@ def camera(t, i):
         z += 0.012 * math.exp(-dt / 0.08)
     sx = amp * (math.sin(t * 91.3) * 0.6 + math.sin(t * 57.1 + 1.3) * 0.4)
     sy = amp * (math.cos(t * 83.7) * 0.6 + math.sin(t * 41.9 + 0.7) * 0.4)
+    if DROP + 0.4 <= t < END:                               # handheld buffeting in the fight: slow sway + roll
+        sx += 11 * (math.sin(t * 3.1) * 0.6 + math.sin(t * 7.3 + 0.4) * 0.4)
+        sy += 9 * (math.sin(t * 2.6 + 1.1) * 0.6 + math.sin(t * 6.1 + 2.0) * 0.4)
+        roll += 0.009 * math.sin(t * 2.2 + 0.5) + 0.004 * math.sin(t * 5.7)
     return z, roll, (cx, cy), (ax, ay), (sx, sy), flash, fcol, chroma
 
 

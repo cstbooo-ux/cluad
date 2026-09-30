@@ -24,6 +24,9 @@ COLLAR = [(-0.62, 0.3), (-0.4, 0.42), (-0.1, 0.52), (0.12, 0.58), (0.3, 0.66), (
           (-0.1, 0.98), (-0.6, 0.9), (-0.85, 0.7), (-0.8, 0.45)]
 BODY = [(-0.95, 0.6), (-0.4, 0.85), (0.1, 0.9), (0.36, 0.95), (0.48, 1.1), (0.52, 1.4), (0.54, 1.7, C),
         (-1.5, 1.7, C), (-1.45, 1.1), (-1.25, 0.75)]
+# neck: fills from under the helmet and jaw down into the collar (no sky showing through)
+NECK = [(-0.44, 0.22), (-0.3, 0.26), (0.0, 0.36), (0.2, 0.45), (0.27, 0.5, C), (0.31, 0.62), (0.36, 0.78),
+        (0.1, 0.86), (-0.4, 0.76), (-0.6, 0.42)]
 MAE_WEST = [(0.25, 0.95), (0.48, 1.02), (0.6, 1.2), (0.6, 1.45), (0.5, 1.62), (0.3, 1.66)]
 
 
@@ -42,7 +45,7 @@ def pilot_profile(ctx, x, y, s, c="#000000", nod=0.0, jaw=0.0, rim=None, rim_w=0
     head = HEAD
     if jaw:
         head = [(p[0] - (0.02 * jaw if 0.2 < p[1] < 0.36 else 0.0), p[1]) + tuple(p[2:]) for p in HEAD]
-    layers = ((BODY, jacket), (MAE_WEST, mae_west), (COLLAR, collar), (head, c), (HELMET, helmet),
+    layers = ((BODY, jacket), (MAE_WEST, mae_west), (NECK, c), (COLLAR, collar), (head, c), (HELMET, helmet),
               (EAR_CUP, helmet), (GOGGLE_STRAP, "#1a120c"), (GOGGLE, "#141010"), (CHIN_STRAP, "#1a120c"))
     for shape, col in layers:
         smooth_path(ctx, pts(shape)); ctx.set_source_rgb(*_rgb(col)); ctx.fill()

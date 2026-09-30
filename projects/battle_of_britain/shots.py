@@ -211,7 +211,7 @@ class Flyer:
     def __init__(self, seed, zmax, y_band):
         self.seed, self.zmax, self.y_band = seed, zmax, y_band
         r = random.Random(seed)
-        self.period = r.uniform(3.2, 6.5)
+        self.period = r.uniform(2.2, 4.4)
         self.offset = r.uniform(0, self.period)
 
     def params(self, cycle):
@@ -219,9 +219,9 @@ class Flyer:
         z = (r.random() ** 1.3) * self.zmax
         kind = r.choices(["spitfire", "bf109", "he111"], [0.42, 0.42, 0.16 if z < 0.4 else 0.03])[0]
         right = r.random() < 0.5
-        state = r.choices(["ok", "smoking", "burning", "glide"], [0.6, 0.15, 0.15, 0.10])[0]
+        state = r.choices(["ok", "smoking", "burning", "glide"], [0.5, 0.2, 0.2, 0.10])[0]
         size = (70 + 330 * z) * (1.35 if kind == "he111" else 1.0)
-        speed = (240 + 900 * z) * self.TYPES[kind] * r.uniform(0.7, 1.35)
+        speed = (420 + 1500 * z) * self.TYPES[kind] * r.uniform(0.75, 1.35)          # fast: this is a dogfight
         if state == "glide":
             speed *= 0.6
         h0 = r.uniform(-0.3, 0.3)
@@ -335,11 +335,11 @@ def air_traffic(ctx, T, seed=0, density=1.0, near=True, far=True, mid=True, y_ba
                              max(1.5, P["size"] * 0.012), 0.9 * (1 - haze))
     if near:
         # a big close pass every ~1.6 s, with speed streaks, flying where its nose points
-        period = 1.6
+        period = 1.1
         k = math.floor((T + seed * 0.37) / period)
         ph = ((T + seed * 0.37) / period) - k
         r2 = random.Random(k * 7919 + seed)
-        dur = 0.32
+        dur = 0.24
         if ph < dur / period:
             q = ph * period / dur
             d = r2.choice((1, -1))
@@ -358,20 +358,58 @@ def air_traffic(ctx, T, seed=0, density=1.0, near=True, far=True, mid=True, y_ba
             A.aircraft(ctx, kind, xx, yy, size, pitch=climb, flip=d < 0, prop_t=T, light=RED_LIGHT, light_amt=0.5)
 
 
+SMOKE_TONES = ("#0c0404", "#1e0c0a", "#3a1a16", "#5a2c22")
+
+
+def speed_layer(ctx, T, seed=0, amount=1.0, direction=-1, lanes=((170, 330), (1160, 1300)), rate=1.3):
+    """Near clouds and drifting battle smoke racing past the camera: sells the speed of the fight.
+    Each lane launches a pass every ~1 s; a pass is a big cloud sprite (sometimes a dark smoke clump) crossing
+    the whole frame in ~0.4 s, smeared along its motion. lanes = base-y ranges (top lane mostly above the frame,
+    bottom lane mostly below it) so the middle of the frame stays readable."""
+    if amount <= 0.01:
+        return
+    from silhouette_kit import clouds as CL
+    for li, (y0, y1) in enumerate(lanes):
+        per = 1.05 / rate
+        tt = T + li * 0.47 + seed * 0.31
+        k = math.floor(tt / per)
+        for kk in (k - 1, k):                                   # the previous pass may still be on screen
+            r = random.Random(seed * 7919 + li * 131 + kk * 104729)
+            if r.random() > amount:
+                continue
+            q = (tt - kk * per) / (per * r.uniform(0.38, 0.5))
+            if not 0 <= q <= 1:
+                continue
+            wd = r.uniform(1300, 2100)
+            smoke_ = r.random() < 0.35
+            tones = SMOKE_TONES if smoke_ else RED_TONES
+            idx = CL.pick(r.randrange(10 ** 6), r.uniform(0.3, 0.6))
+            travel = W + wd * 1.3
+            x = (W + wd * 0.65 - q * travel) if direction < 0 else (-wd * 0.65 + q * travel)
+            yb = r.uniform(y0, y1)
+            al = (0.75 if smoke_ else 0.92)
+            for j in range(4):                                   # motion smear trailing behind
+                off = -direction * j * wd * 0.035
+                CL.draw(ctx, x + off, yb, wd, tones, idx, al * (0.55 if j else 1.0) / (1 + j * 0.6),
+                        stretch=0.85)
+
+
 # ================================================================== 1940 · BATTLE
 def battle_sky(ctx, T, scroll=0.0, tilt=0.0, smoke=True, bombers=None, flak_n=10, seed=0, traffic=1.0, near=True,
-               cloud_speed=1.0, zmax=0.55, traffic_alpha=1.0):
+               cloud_speed=6.0, zmax=0.55, traffic_alpha=1.0):
     ctx.save()
     if tilt:
         ctx.translate(W / 2, H / 2); ctx.rotate(tilt); ctx.scale(1.25, 1.25); ctx.translate(-W / 2, -H / 2)
     sky(ctx, 1.0)
     sun(ctx, 1450, 700, 60, 1.0)
-    L.sky_clouds(ctx, T, RED_TONES, seed=31 + seed, scroll=scroll * 0.3, speed=cloud_speed, haze=HAZE, horizon=760)
+    L.sky_clouds(ctx, T, RED_TONES, seed=31 + seed, scroll=scroll * 0.8, speed=cloud_speed, haze=HAZE, horizon=760)
     if smoke:
         fx.smoke(ctx, 300, 1100, 900, 60, "#2a0c0c", seed=33, t=T, a=0.55, lean=0.35)
         fx.smoke(ctx, 1650, 1100, 700, 45, "#2a0c0c", seed=34, t=T, a=0.45, lean=-0.2)
+        fx.smoke(ctx, 880, 1000, 620, 30, mix("#2a0c0c", HAZE, 0.35), seed=36, t=T, a=0.4, lean=0.15)
+        fx.smoke(ctx, 1260, 980, 520, 24, mix("#2a0c0c", HAZE, 0.5), seed=37, t=T, a=0.35, lean=-0.1)
     rnd = random.Random(35 + seed)
-    for _ in range(flak_n):
+    for _ in range(int(flak_n * 1.6)):
         from silhouette_kit.core import flak
         flak(ctx, rnd.uniform(0, W), rnd.uniform(80, 520), rnd.uniform(10, 22), "#1e0808", seed=rnd.randint(0, 999), a=0.7)
     if bombers:
@@ -424,6 +462,7 @@ def shot_cut_spitfire(ctx, u, T, reveal=0.0, **follow):
     A.aircraft(ctx, "spitfire", x, yy, size, pitch=pp, prop_t=T, light=RED_LIGHT, light_amt=0.45)
     if 0.08 < u and reveal < 0.6:
         fx.tracers(ctx, T * 0.6 + u, 41, n=6, x0=W + 60, y0=380, ang=math.pi + 0.06, spread=60, speed=3000)
+    speed_layer(ctx, T, seed=1, amount=0.9 * r)                  # the fight's speed arrives with the formation
 
 
 def shot_formation(ctx, u, T):
@@ -446,6 +485,7 @@ def shot_cockpit(ctx, u, T, jaw=1.0, look=0.0):
     sky(ctx, 1.0)
     L.sky_clouds(ctx, T, RED_TONES, seed=51, speed=9.0, haze=HAZE, horizon=640)
     air_traffic(ctx, T, seed=5, density=0.45, near=False, zmax=0.6)
+    speed_layer(ctx, T, seed=3, amount=0.9)
     shake = 3 * math.sin(T * 37)
     pilot_profile(ctx, 1000 + shake, 430, 400, nod=-0.05 + look, jaw=jaw, rim=RED_LIGHT, lens="#c85a3a")
     # canopy frame + armoured headrest + mirror
@@ -477,6 +517,7 @@ def shot_wing_bank(ctx, u, T, bank=0.5):
     battle_sky(ctx, T, tilt=-bank * 0.6, smoke=False, flak_n=6, seed=2)
     A.planform(ctx, "spitfire", 700, 780, 1500, heading=-0.25 - bank * 0.2, view="above",
                light=RED_LIGHT, light_amt=0.45)
+    speed_layer(ctx, T, seed=4, amount=1.0, rate=1.3)
 
 
 def shot_gunsight(ctx, u, T, target_x=0.0):
@@ -495,6 +536,7 @@ def shot_gunsight(ctx, u, T, target_x=0.0):
         line(ctx, [(cx + math.cos(ang) * 40, cy + math.sin(ang) * 40), (cx + math.cos(ang) * 200, cy + math.sin(ang) * 200)],
              c, 3, 0.85)
     circle(ctx, cx, cy, 6, c, 0.9)
+    speed_layer(ctx, T, seed=5, amount=0.8)
     # windscreen frame + armoured glass edge
     k = "#0a0506"
     fill_poly(ctx, [(0, 0), (380, 0), (240, H), (0, H)], k)
@@ -528,6 +570,7 @@ def shot_wing_guns(ctx, u, T, firing=True):
     ctx.restore()
     if firing:
         fx.tracers(ctx, T, 71, n=10, x0=900, y0=260, ang=-0.22, spread=40, speed=3600)
+    speed_layer(ctx, T, seed=7, amount=1.0, rate=1.3)
 
 
 def shot_break_cloud(ctx, u, T):
@@ -539,6 +582,7 @@ def shot_break_cloud(ctx, u, T):
     # the cloud top it bursts out of drops away fast below
     for i in range(4):
         L.cumulus_rich(ctx, 250 + i * 430 - u * 700, 960 - i * 25 + k * 420, 820, RED_TONES, 80 + i, a=0.97, t=T)
+    speed_layer(ctx, T, seed=9, amount=0.8, lanes=((170, 330),))
 
 
 def shot_chase(ctx, u, T, hit_wingman=0.0):
@@ -552,6 +596,7 @@ def shot_chase(ctx, u, T, hit_wingman=0.0):
         ph = (T * 6 + k / 6) % 1
         x0 = 700 + u * 200 + ph * 800
         line(ctx, [(x0, 575 - ph * 60 + k * 3), (x0 + 90, 568 - ph * 60 + k * 3)], "#ffe6a0", 3, 0.9)
+    speed_layer(ctx, T, seed=11, amount=1.0, rate=1.2)
 
 
 def shot_attack(ctx, u, T):
@@ -564,6 +609,7 @@ def shot_attack(ctx, u, T):
     A.aircraft(ctx, "spitfire", 380 + u * 380, 260 + u * 200, 330, pitch=-0.4, bank=-0.15, prop_t=T,
                light=RED_LIGHT, light_amt=0.45)
     fx.tracers(ctx, T, 93, n=8, x0=560 + u * 380, y0=360 + u * 200, ang=0.38, spread=20, speed=3000)
+    speed_layer(ctx, T, seed=13, amount=1.0, rate=1.2)
 
 
 def shot_hit(ctx, u, T):
@@ -583,6 +629,7 @@ def shot_hit(ctx, u, T):
     for _ in range(10):
         px, py = 900 + rnd.uniform(-200, 100), 540 + rnd.uniform(-40, 30)
         line(ctx, [(px, py), (px + rnd.uniform(-30, 30), py + rnd.uniform(-30, 30))], "#ffd070", 2, 0.9)
+    speed_layer(ctx, T, seed=15, amount=1.0, rate=1.2)
 
 
 def shot_falling(ctx, u, T):
