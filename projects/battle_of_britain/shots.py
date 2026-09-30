@@ -312,6 +312,27 @@ def burst(ctx, x0, y0, ang, T, seed=0, n=6, speed=2600.0, reach=1400.0, length=1
         glow(ctx, px, py, width * 3.5, c, 0.5 * (1 - ph * 0.6))
 
 
+def depth_schedule(t0, t1, seed=0):
+    """(start, duration, 'toward'|'away', side, firing) of every depth_passes plane overlapping [t0, t1] - the
+    same random draws as the picture, so the soundtrack can follow them."""
+    out = []
+    for kind_, per, dur, off in (("toward", 2.3, 0.95, 0.0), ("away", 2.9, 1.3, 1.1)):
+        sh = off + seed * 0.53
+        for k in range(int(math.floor((t0 + sh) / per)) - 1, int(math.floor((t1 + sh) / per)) + 1):
+            start = k * per - sh
+            if start + dur < t0 or start > t1:
+                continue
+            r = random.Random(k * 7919 + seed * 31 + (1 if kind_ == "away" else 0))
+            r.choice(("spitfire", "bf109", "bf109")); r.uniform(560, 1360); r.uniform(260, 560)
+            side = r.choice((-1, 1)); r.uniform(0.5, 1.0); r.uniform(-0.6, 0.5)
+            firing = False
+            if kind_ == "toward":
+                r.uniform(-0.4, 0.4)
+                firing = r.random() < 0.6
+            out.append((start, dur, kind_, side, firing))
+    return out
+
+
 def depth_passes(ctx, T, seed=0, haze_far=0.6):
     """Planes that move through DEPTH, not just across the frame: one coming head-on at the camera and breaking
     away (growing, rolling, sometimes firing), one turning away and shrinking into the distance."""
@@ -500,6 +521,50 @@ def speed_layer(ctx, T, seed=0, amount=1.0, direction=-1, lanes=((170, 330), (11
 
 
 # ================================================================== 1940 · BATTLE
+def manga_lines(ctx, T, amount=1.0, mode="parallel", center=(960, 540), ang=math.pi, seed=0, clear=0.3):
+    """Comic-book speed lines, redrawn 12 times a second so they 'boil' like hand-drawn frames.
+    mode 'radial': focus lines rushing in from the frame edge toward `center`, leaving it clear.
+    mode 'parallel': streaks along `ang` (the direction the world rushes past), thinner near the middle band."""
+    if amount <= 0.01:
+        return
+    r = random.Random(seed * 1000 + int(T * 12))
+    cx, cy = center
+    if mode == "radial":
+        for _ in range(int(80 * amount)):
+            a_ = r.uniform(0, TAU)
+            r1 = r.uniform(H * clear, H * (clear + 0.35))
+            r0 = 1500
+            w = r.uniform(4, 20)
+            ca, sa = math.cos(a_), math.sin(a_)
+            fill_poly(ctx, [(cx + ca * r0 - sa * w, cy + sa * r0 + ca * w), (cx + ca * r0 + sa * w, cy + sa * r0 - ca * w),
+                            (cx + ca * r1, cy + sa * r1)], r.choice(("#fff2de", "#fff2de", "#1a0606")),
+                      r.uniform(0.25, 0.6) * amount)
+    else:
+        ca, sa = math.cos(ang), math.sin(ang)
+        for _ in range(int(55 * amount)):
+            y = r.uniform(-100, H + 100)
+            if abs(y - cy) < H * clear * 0.5 and r.random() < 0.8:
+                continue
+            x = r.uniform(-200, W + 200)
+            L = r.uniform(250, 1100)
+            w = r.uniform(1.5, 7)
+            fill_poly(ctx, [(x - sa * w, y + ca * w), (x + sa * w, y - ca * w), (x - ca * L, y - sa * L)],
+                      r.choice(("#fff2de", "#fff2de", "#ffd8b0")), r.uniform(0.18, 0.5) * amount)
+
+
+def smoke_columns(ctx, T, scroll=0.0, speed=6.0, a=1.0):
+    """Smoke rising from burning wrecks on the ground far below. They are fixed to the GROUND, so they slide past
+    with it (the same drift and parallax as the near cloud rows), nearer columns faster than far ones."""
+    span = W + 1200
+    for x0, base, h, w, col, sd, al, lean, par in ((300, 1100, 900, 60, "#2a0c0c", 33, 0.95, 0.35, 1.25),
+                                                    (1650, 1100, 700, 45, "#2a0c0c", 34, 0.85, -0.2, 1.1),
+                                                    (880, 1000, 620, 30, mix("#2a0c0c", HAZE, 0.35), 36, 0.7, 0.15, 0.8),
+                                                    (1260, 980, 520, 24, mix("#2a0c0c", HAZE, 0.5), 37, 0.6, -0.1, 0.6)):
+        drift = (scroll * 0.8 + T * speed * 3) * par
+        x = (x0 - drift) % span - 600
+        fx.smoke(ctx, x, base, h, w, col, seed=sd, t=T, a=al * a, lean=lean)
+
+
 def battle_sky(ctx, T, scroll=0.0, tilt=0.0, smoke=True, bombers=None, flak_n=10, seed=0, traffic=1.0, near=True,
                cloud_speed=6.0, zmax=0.55, traffic_alpha=1.0):
     ctx.save()
@@ -509,10 +574,7 @@ def battle_sky(ctx, T, scroll=0.0, tilt=0.0, smoke=True, bombers=None, flak_n=10
     sun(ctx, 1450, 700, 60, 1.0)
     L.sky_clouds(ctx, T, RED_TONES, seed=31 + seed, scroll=scroll * 0.8, speed=cloud_speed, haze=HAZE, horizon=760)
     if smoke:
-        fx.smoke(ctx, 300, 1100, 900, 60, "#2a0c0c", seed=33, t=T, a=0.95, lean=0.35)
-        fx.smoke(ctx, 1650, 1100, 700, 45, "#2a0c0c", seed=34, t=T, a=0.85, lean=-0.2)
-        fx.smoke(ctx, 880, 1000, 620, 30, mix("#2a0c0c", HAZE, 0.35), seed=36, t=T, a=0.7, lean=0.15)
-        fx.smoke(ctx, 1260, 980, 520, 24, mix("#2a0c0c", HAZE, 0.5), seed=37, t=T, a=0.6, lean=-0.1)
+        smoke_columns(ctx, T, scroll=scroll, speed=cloud_speed)
     rnd = random.Random(35 + seed)
     for _ in range(int(flak_n * 1.6)):
         from silhouette_kit.core import flak
@@ -545,8 +607,7 @@ def shot_cut_spitfire(ctx, u, T, reveal=0.0, **follow):
     shot_follow_plane(ctx, 1.0, T, craft="none", **fp)
     if r > 0.001:
         ctx.push_group()                                        # the battle, far away in the same sky
-        fx.smoke(ctx, 260, 1150, 900, 55, "#2a0c0c", seed=33, t=T, a=0.8, lean=0.35)
-        fx.smoke(ctx, 1720, 1150, 760, 42, "#2a0c0c", seed=34, t=T, a=0.7, lean=-0.2)
+        smoke_columns(ctx, T, speed=2.0, a=0.85)
         rnd = random.Random(35)
         from silhouette_kit.core import flak
         for _ in range(8):
@@ -1014,24 +1075,24 @@ def shot_fall_closeup(ctx, u, T, k, memory=False):
     from 1930 (memory=True), in exactly the same place on screen, at the same nose-down angle.
     The world moves along the line of the fall (clouds rising past, then the fields far below slowly coming up).
     k: 0 -> 1 progress through the whole fall (shared by both, so the two descents stay in step)."""
-    a = -0.62 + 0.07 * math.sin(T * 1.3)                    # frame 'up' = straight back along the flight path
+    a = -0.75 - 0.06 * math.sin(T * 1.5)                    # continues the spin shot exactly (seamless cut)
     redness = 0.0 if memory else 1.0 - 0.35 * k
     tones = L.CLOUD_TONES["gold"] if memory else L.tones_mix("gold", "red", 1.0 - 0.3 * k)
     ctx.save()
     ctx.translate(W / 2, H / 2); ctx.rotate(a); ctx.scale(2.0, 2.0); ctx.translate(-W / 2, -H / 2)
     sky(ctx, redness)
-    sun(ctx, 1480, 260 + 200 * k, 70, redness)
+    sun(ctx, 1450, -200 + 500 * k, 60 + 10 * k, redness)
     kk = max(0.0, (k - 0.25) / 0.75)
     if kk > 0:                                               # below the cloud: the fields far below, coming up
         ground_rush(ctx, T, 320 - 270 * kk, redness, horizon=760 - 320 * kk, speed=5 + 6 * kk, seed=21,
                     wrecks=() if memory else ((6, 90), (-40, 160)), haze="#f0d8a0" if memory else None)
     cloud_amt = 1.0 if (k < 0.3 or memory) else 0.8
-    rushing_clouds(ctx, T, amount=cloud_amt, tones=tones, seed=23 if memory else 3, up=650, n=7)
-    if k < 0.25:                                             # still inside the cloud: a veil of haze
-        rect(ctx, 0, 0, W, H, "#f4e2c0" if memory else mix("#d88a70", HAZE, 0.3), 0.45 * (1 - k / 0.25))
+    rushing_clouds(ctx, T, amount=cloud_amt, tones=tones, seed=23 if memory else 3, up=450, n=7)
+    if k < 0.1:                                              # coming out of the cloud the spin plunged into
+        rect(ctx, 0, 0, W, H, "#f4e2c0" if memory else mix("#d88a70", HAZE, 0.3), 0.85 * (1 - ease(k / 0.1)))
     ctx.restore()
-    x, y = 960 + 18 * math.sin(T * 2.7), 520 + 8 * math.sin(T * 1.9)
-    pitch = -0.95 + 0.08 * math.sin(T * 2.3)
+    x, y = 960 + 20 * math.sin(T * 1.5), 520                   # same pose as the end of the spin shot
+    pitch = -1.45 + 0.06 * math.sin(T * 2.3)
     if memory:
         for j in range(5):                                   # thin air lines streaming off the paper
             rr = random.Random(j * 13)
@@ -1042,7 +1103,7 @@ def shot_fall_closeup(ctx, u, T, k, memory=False):
             line(ctx, [(ox, oy), (ox + dx * 160, oy - abs(dy) * 160)], "#fffaf0", 2, 0.35 * (1 - ph))
         A.paper_plane(ctx, x, y, 470, pitch=pitch)
     else:
-        falling_plane(ctx, T, x, y, 420, pitch, roll_rate=6, redness=redness)
+        falling_plane(ctx, T, x, y, 420, pitch, roll_rate=3, redness=redness)
 
 
 def shot_tree(ctx, u, T):
@@ -1084,6 +1145,36 @@ def shot_cockpit_fall(ctx, u, T):
                   rim=mix(RED_LIGHT, "#ffb060", flick * 0.5), rim_w=0.6, lens="#e87040")
     cockpit_frame(ctx)
     rect(ctx, 0, 0, W, H, "#ff6020", 0.05 + 0.05 * flick)
+
+
+def shot_ending_plane(ctx, q, T):
+    """1930 again, and only the paper plane: it drops out of the sky nose-down (as it fell in his memory), flattens
+    out into a last glide, and settles in the grass by the oak. q: 0 -> 1 over the fall; after 1 it rests."""
+    sky(ctx, 0.0)
+    sun(ctx, 1500, 260, 80, 0.0)
+    L.sky_clouds(ctx, T, L.CLOUD_TONES["gold"], seed=5, speed=0.3, density=0.5, haze="#f4d193", horizon=520,
+                 scale=0.7)
+    L.rolling_field(ctx, 640, 26, KENT["far"], seed=1, freq=0.5)
+    L.oak_tree(ctx, 1500, 700, 330, mix(KENT["oak"], "#8a7a5a", 0.35), seed=7, t=T)
+    L.rolling_field(ctx, 760, 18, KENT["fields"], seed=2, freq=0.8)
+    L.grass(ctx, 900, -100, W + 100, 90, "#3a3420", seed=110, t=T, density=10)
+    gy = 960
+    p0, p1, p2 = (560, -160), (700, 620), (1000, gy - 14)            # quadratic path: drop, then flatten out
+    k = ease(min(1.0, q)) if q < 1 else 1.0
+    kk = k ** 0.8
+    x = (1 - kk) ** 2 * p0[0] + 2 * (1 - kk) * kk * p1[0] + kk * kk * p2[0]
+    y = (1 - kk) ** 2 * p0[1] + 2 * (1 - kk) * kk * p1[1] + kk * kk * p2[1]
+    dx = 2 * (1 - kk) * (p1[0] - p0[0]) + 2 * kk * (p2[0] - p1[0])
+    dy = 2 * (1 - kk) * (p1[1] - p0[1]) + 2 * kk * (p2[1] - p1[1])
+    if q < 1:
+        pitch = -math.atan2(dy, dx) * (1 - k ** 3) - 0.06 * k ** 3
+        x += 14 * math.sin(T * 3.1) * (1 - k)                         # flutter in the air
+        pitch += 0.08 * math.sin(T * 4.3) * (1 - k)
+    else:
+        rest = q - 1                                                  # a small settle, then still
+        pitch = -0.06 + 0.05 * math.exp(-rest * 6) * math.sin(rest * 18)
+    A.paper_plane(ctx, x, y, 170, pitch=pitch)
+    L.grass(ctx, 1000, -100, W + 100, 60, "#1e1a10", seed=111, t=T, density=8)
 
 
 def shot_ending_grass(ctx, u, T, pick=0.0):

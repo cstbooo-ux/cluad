@@ -121,16 +121,13 @@ def hit_shot(ctx, t):
     S.shot_hit(ctx, lin(t, beat(17), beat(19)), t)
 
 
+LAND_T = 37.3                                               # the paper plane touches the grass
+
+
 def ending_shot(ctx, t):
-    if t < 35.6:
-        pick = 0.05 * lin(t, END, 35.6)
-    elif t < 37.2:
-        pick = 0.05 + 0.25 * lin(t, 35.6, 37.2)
-    elif t < 38.2:
-        pick = 0.3 + 0.3 * lin(t, 37.2, 38.2)
-    else:
-        pick = 0.6 + 0.4 * lin(t, 38.2, 39.7)
-    S.shot_ending_grass(ctx, 0, t, pick=pick)
+    """Only the paper plane now: it falls out of the golden sky and comes to rest in the grass."""
+    q = lin(t, END, LAND_T) if t < LAND_T else 1.0 + (t - LAND_T)
+    S.shot_ending_plane(ctx, q, t)
 
 
 # the fall after the spin: the burning Spitfire intercut with the paper plane from 1930 falling in the same
@@ -147,7 +144,8 @@ for n_, b_ in enumerate(FALL_CUTS):
     t1_ = beat(FALL_CUTS[n_ + 1]) if n_ + 1 < len(FALL_CUTS) else END
     mem_ = n_ % 2 == 1
     FALL_MONTAGE.append((beat(b_), t1_, _fall_shot(mem_),
-                         dict(shake=0.6, zoom=(1.0, 1.03), soft=True) if mem_ else dict(shake=6.0, zoom=(1.0, 1.05))))
+                         dict(shake=0.6, zoom=(1.1, 1.12), soft=True) if mem_ else
+                         dict(shake=6.0, zoom=(1.1, 1.14), cont=n_ == 0)))
 
 # (start, end, draw(ctx, t), camera)
 #   camera: zoom=(z0, z1) over the shot, center=(x, y), shake=base jitter px, roll=(r0, r1) radians, grade
@@ -155,7 +153,12 @@ TL = [
     (0.0, 4.6, run_shot, dict()),
     (4.6, 5.71, throw_shot, dict(zoom=(1.0, 1.06))),
     (5.71, DROP, follow_shot, dict(zoom=(1.0, 1.0), center=PLANE["plane_xy"], shake=1.0)),
-    (DROP, beat(4), cut_shot, dict(center=PLANE["plane_xy"], push=(DROP, beat(1), beat(3)), shake=3.0)),
+    (DROP, beat(4), cut_shot, dict(center=PLANE["plane_xy"], shake=3.0, keys=[
+        (DROP, 1.0, PLANE["plane_xy"]), (beat(1), 1.9, (1010, 560)),        # slam in on the new Spitfire
+        (beat(2.2), 1.0, (960, 540)),                                         # pull right back: the whole battle
+        (beat(2.9), 1.75, (620, 330)),                                        # crash in on a dogfight up-left
+        (beat(3.4), 1.25, (1300, 380)),                                       # whip across to the bombers
+        (beat(4), 1.0, (960, 540))])),                                        # and out wide again
     (beat(4), beat(6), lambda c, t: S.shot_cockpit(c, lin(t, beat(4), beat(6)), t, jaw=0.4 + 0.6 * lin(t, beat(4), beat(5))),
      dict(zoom=(1.0, 1.08), shake=5.0)),
     (beat(6), beat(7), lambda c, t: S.shot_stick(c, 0, t, squeeze=ease(lin(t, beat(6), beat(6) + 0.3))),
@@ -181,7 +184,7 @@ for t_, st_ in ((8.4, 0.18), (9.9, 0.18), (11.2, 0.3), (11.86, 0.25), (12.2, 0.3
                 (13.22, 0.5)):                              # turbulence jolts as clouds whip past before the drop
     IMPACTS.append((t_, st_, None))
 for s_ in TL[3:-1]:                                          # every climax cut (memory cuts stay soft)
-    if s_[0] not in (beat(17), DROP) and not s_[3].get("soft"):
+    if s_[0] not in (beat(17), DROP) and not s_[3].get("soft") and not s_[3].get("cont"):
         IMPACTS.append((s_[0], 0.55, None))
 for h_t, h_s in MUSIC["hits"]:                              # strong accents inside the climax
     if DROP + 0.3 < h_t < END - 0.1 and h_s > 1.0:
@@ -218,6 +221,15 @@ def camera(t, i):
             k = 1 - ease(lin(t, p1, p2))
         z = 1.0 + 0.9 * k
         ax, ay = cx + (1010 - cx) * k, cy + (560 - cy) * k
+    if "keys" in cam:                                        # keyed zoom: (time, zoom, focus point) with easing
+        ks = cam["keys"]
+        for (ta, za, pa), (tb, zb, pb) in zip(ks[:-1], ks[1:]):
+            if ta <= t <= tb:
+                q = ease(lin(t, ta, tb))
+                z = za + (zb - za) * q
+                cx = ax = pa[0] + (pb[0] - pa[0]) * q
+                cy = ay = pa[1] + (pb[1] - pa[1]) * q
+                break
     if "anchor0" in cam:
         ax, ay = cam["anchor0"][0] + (cx - cam["anchor0"][0]) * ku, cam["anchor0"][1] + (cy - cam["anchor0"][1]) * ku
     amp = cam.get("shake", 0.0)
@@ -257,6 +269,11 @@ def render_frame(fi):
     ctx.translate(ax + sx, ay + sy); ctx.rotate(roll); ctx.scale(z, z); ctx.translate(-cx, -cy)
     TL[i][2](ctx, t)
     ctx.restore()
+    if DROP <= t < beat(4) and t - DROP >= 2.5 / FPS:        # comic speed lines over the first battle shot
+        rad = max(1 - lin(t, DROP + 0.05, beat(1)), math.exp(-((t - beat(2.9)) / 0.18) ** 2))
+        S.manga_lines(ctx, t, amount=rad, mode="radial", center=(960, 540), seed=3)
+        S.manga_lines(ctx, t, amount=0.9 * lin(t, beat(1), beat(1.6)) * (1 - 0.6 * rad), mode="parallel",
+                      ang=math.pi + 0.08, seed=4)
     impact_frame = 0 <= t - DROP < 2.5 / FPS or 0 <= t - beat(17) < 2.5 / FPS
     if flash > 0.01 and not impact_frame:
         rect(ctx, 0, 0, W, H, fcol, flash)
@@ -313,7 +330,7 @@ def video(out):
 
 def audio(out):
     import soundtrack
-    soundtrack.build(out, TL, IMPACTS, beat, DROP, END, DUR)
+    soundtrack.build(out, TL, IMPACTS, beat, DROP, END, DUR, land_t=LAND_T)
 
 
 def sheet(out):
