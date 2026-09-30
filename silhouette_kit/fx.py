@@ -151,17 +151,40 @@ def ash(ctx, t, seed, n=80, c="#3a3030"):
 
 
 def smoke(ctx, x, base, h, width, c, seed, t=0.0, a=0.85, lean=0.25, rise=18.0):
-    """Billowing smoke column as one merged flat shape, slowly rolling upward."""
+    """Rising smoke column made of soft, translucent puffs that are born at the base, rise, spread and thin out.
+    Dense near the source; higher up the wind shears it sideways, it breaks into separate wisps with sky showing
+    through, and it dissipates - no hard outline, no regular segments."""
     rnd = random.Random(seed)
-    n = max(16, int(h / (width * 0.3)))
+    col = hx(c) if isinstance(c, str) else c
+    life = max(4.0, h / (rise * 1.6))
+    n = max(40, int(h / (width * 0.1)))
+    ph0 = [rnd.uniform(0, TAU) for _ in range(3)]
     ctx.push_group()
     for i in range(n):
-        tt = i / (n - 1)
-        cx = x + lean * h * tt ** 1.4 + rnd.uniform(-12, 12) + 6 * math.sin(t + i)
-        cy = base - h * tt - (t * rise) % (h / n)
-        r = width * (0.35 + 0.9 * tt) * rnd.uniform(0.8, 1.15) * (1 + 0.04 * math.sin(t * 2 + i))
-        circle(ctx, cx, cy, r, c)
-        circle(ctx, cx + r * 0.5, cy + r * 0.2, r * 0.7, c)
+        ph = rnd.random()
+        age = (t / life + ph) % 1.0
+        side = rnd.uniform(-1, 1)
+        sz = rnd.uniform(0.55, 1.35)
+        stretch = rnd.uniform(1.0, 2.2)
+        dark = rnd.uniform(0.35, 0.85)
+        if rnd.random() < 0.25 * age:                          # gaps where it has torn apart
+            continue
+        y = base - h * age
+        # meandering, sheared centre line (non-periodic: three incommensurate waves)
+        mid = (lean * h * age ** 1.5 + width * 0.7 * (math.sin(age * 4.1 + ph0[0]) + 0.6 * math.sin(age * 9.3 + ph0[1])
+               + 0.4 * math.sin(t * 0.3 + age * 2 + ph0[2])))
+        cx = x + mid + side * width * (0.25 + 2.2 * age ** 1.2)
+        r = width * (0.45 + 1.5 * age) * sz
+        al = min(1.0, 1.5 * dark * min(1.0, age / 0.06) * (1 - age) ** 1.3)
+        if al < 0.02:
+            continue
+        g = cairo.RadialGradient(0, 0, 0, 0, 0, 1)
+        g.add_color_stop_rgba(0, *col, al)
+        g.add_color_stop_rgba(0.55, *col, al * 0.55)
+        g.add_color_stop_rgba(1, *col, 0.0)
+        ctx.save(); ctx.translate(cx, y); ctx.rotate(lean * 0.6 * age); ctx.scale(r * (1 + (stretch - 1) * age), r)
+        ctx.arc(0, 0, 1, 0, TAU); ctx.set_source(g); ctx.fill()   # gradient in the puff's own frame
+        ctx.restore()
     ctx.pop_group_to_source(); ctx.paint_with_alpha(a)
 
 

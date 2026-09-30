@@ -229,7 +229,9 @@ class Flyer:
             h0 = r.uniform(0.12, 0.22)
         if state in ("smoking", "burning"):
             h0 = r.uniform(-0.05, 0.25)
-        turn = r.uniform(-0.35, 0.35) if state == "ok" else r.uniform(-0.12, 0.12)
+        man = r.choices(["cruise", "turn", "roll"], [0.3, 0.5, 0.2])[0] if state == "ok" else "cruise"
+        turn = {"cruise": r.uniform(-0.2, 0.2), "turn": r.choice((-1, 1)) * r.uniform(0.55, 1.1),
+                "roll": r.uniform(-0.3, 0.3)}[man] if state == "ok" else r.uniform(-0.12, 0.12)
         if not right:
             h0 = math.pi - h0
             turn = -turn
@@ -240,7 +242,8 @@ class Flyer:
         if state in ("smoking", "burning"):
             y0 = r.uniform(self.y_band[0], (self.y_band[0] + self.y_band[1]) / 2)
         return dict(z=z, kind=kind, state=state, size=size, v=speed, h0=h0, w=turn, g=g, x0=x0, y0=y0,
-                    chase=(state == "ok" and r.random() < 0.4), roll=r.uniform(4, 8), rs=r.random())
+                    chase=(state == "ok" and r.random() < 0.4), roll=r.uniform(4, 8), rs=r.random(), man=man,
+                    bank=r.uniform(0.75, 1.25), rollrate=r.choice((-1, 1)) * r.uniform(5, 8))
 
     def pos(self, P, a):
         if a < 0:
@@ -263,6 +266,84 @@ class Flyer:
         return c, (T + self.offset) - c * self.period
 
 
+def gun_flash(ctx, x, y, ang, s, T, seed=0, rate=15.0):
+    """Muzzle flash pointing along ang: flickers on and off with the rate of fire."""
+    ph = (T * rate + seed * 0.37) % 1
+    if ph > 0.6:
+        return
+    r = random.Random(int(T * rate) * 31 + seed)
+    k = s * r.uniform(0.8, 1.5)
+    ca, sa = math.cos(ang), math.sin(ang)
+    glow(ctx, x, y, s * 2.2, "#ffb050", 0.55)
+    fill_poly(ctx, [(x - sa * k * 0.28, y + ca * k * 0.28), (x + ca * k * 1.6, y + sa * k * 1.6),
+                    (x + sa * k * 0.28, y - ca * k * 0.28), (x - ca * k * 0.3, y - sa * k * 0.3)], "#ffd27a")
+    fill_poly(ctx, [(x - sa * k * 0.5, y + ca * k * 0.5), (x + ca * k * 0.35, y + sa * k * 0.35),
+                    (x + sa * k * 0.5, y - ca * k * 0.5)], "#ffe9b0", 0.8)
+    circle(ctx, x, y, s * 0.3, "#fffbe8")
+
+
+def burst(ctx, x0, y0, ang, T, seed=0, n=6, speed=2600.0, reach=1400.0, length=110.0, width=3.0, spread=0.025,
+          a=0.95, c="#ffe6a0", target=None, p_hit=0.6):
+    """Tracer rounds leaving a gun at (x0, y0) along ang: each is a bright streak that starts AT the muzzle and
+    flies out. target=(x, y): rounds that hit stop there in a burst of sparks; the rest fly on past."""
+    rnd = random.Random(seed)
+    for i in range(n):
+        dev = rnd.uniform(-spread, spread)
+        hit = target is not None and rnd.random() < p_hit
+        ph = (T * speed / reach + i / n + rnd.random() * 0.2) % 1
+        d = ph * reach
+        aa = ang + dev
+        if hit:
+            tx, ty = target[0] + rnd.uniform(-40, 40), target[1] + rnd.uniform(-20, 20)
+            aa = math.atan2(ty - y0, tx - x0)
+            dist = math.hypot(tx - x0, ty - y0)
+            if d > dist:                                     # arrived: sparks, then nothing
+                if d - dist < speed * 0.05:
+                    glow(ctx, tx, ty, 30, "#ffd070", 0.9)
+                    for k in range(5):
+                        sa_ = rnd.uniform(0, TAU)
+                        L_ = rnd.uniform(15, 45)
+                        line(ctx, [(tx, ty), (tx + math.cos(sa_) * L_, ty + math.sin(sa_) * L_)], "#ffe0a0", 2, 0.9)
+                continue
+        ca, sa = math.cos(aa), math.sin(aa)
+        L = min(length, d)
+        px, py = x0 + ca * d, y0 + sa * d
+        line(ctx, [(px, py), (px - ca * L, py - sa * L)], c, width, a * (1 - ph * 0.6))
+        glow(ctx, px, py, width * 3.5, c, 0.5 * (1 - ph * 0.6))
+
+
+def depth_passes(ctx, T, seed=0, haze_far=0.6):
+    """Planes that move through DEPTH, not just across the frame: one coming head-on at the camera and breaking
+    away (growing, rolling, sometimes firing), one turning away and shrinking into the distance."""
+    for kind_, per, dur, off in (("toward", 2.3, 0.95, 0.0), ("away", 2.9, 1.3, 1.1)):
+        tt = T + off + seed * 0.53
+        k = math.floor(tt / per)
+        q = (tt - k * per) / dur
+        if not 0 <= q <= 1:
+            continue
+        r = random.Random(k * 7919 + seed * 31 + (1 if kind_ == "away" else 0))
+        kind = r.choice(("spitfire", "bf109", "bf109"))
+        sx, sy = r.uniform(560, 1360), r.uniform(260, 560)
+        dirx, diry = r.choice((-1, 1)) * r.uniform(0.5, 1.0), r.uniform(-0.6, 0.5)
+        n_ = math.hypot(dirx, diry); dirx, diry = dirx / n_, diry / n_
+        if kind_ == "toward":
+            span = 40 * math.exp(q * 2.4)                        # 40 -> 440 px
+            x, y = sx + dirx * 900 * q ** 2.4, sy + diry * 600 * q ** 2.4
+            roll = r.uniform(-0.4, 0.4) + dirx * 1.1 * q ** 2
+        else:
+            span = 420 * math.exp(-q * 2.6)
+            x, y = sx + dirx * 900 * (1 - q) ** 2.2, sy + diry * 600 * (1 - q) ** 2.2
+            roll = (0.35 + 1.0 * q) * (1 if dirx > 0 else -1)
+        hz = haze_far * max(0.0, 1 - span / 380)
+        A.tail_on(ctx, kind, x, y, span, roll=roll, prop_t=T, light=RED_LIGHT, light_amt=0.4, haze=HAZE, haze_amt=hz)
+        if kind_ == "toward" and r.random() < 0.6 and 0.2 < q < 0.85:     # firing at us: flashes on both wings
+            s_ = span / 1.1
+            for side in (-1, 1):
+                gx = x + side * s_ * 0.3 * math.cos(roll)
+                gy = y - side * s_ * 0.3 * math.sin(roll) - s_ * 0.03
+                gun_flash(ctx, gx, gy, math.atan2(gy - 540, gx - 960) + math.pi, span * 0.05, T, seed=side + k)
+
+
 def air_traffic(ctx, T, seed=0, density=1.0, near=True, far=True, mid=True, y_band=(120, 900), ground=None,
                 zmax=1.0):
     """Friendly and enemy aircraft on curved paths at several depths: dogfights, burning planes falling
@@ -281,6 +362,8 @@ def air_traffic(ctx, T, seed=0, density=1.0, near=True, far=True, mid=True, y_ba
     for z, x, y0, sz in chutes:
         draw.append((z, "chute", (x, y0, sz), 0))
     draw.sort(key=lambda d: d[0])
+    if mid and density > 0.3:
+        depth_passes(ctx, T, seed=seed)
     for z, f, P, a in draw:
         haze = 0.75 * (1 - z)
         if f == "chute":
@@ -309,6 +392,10 @@ def air_traffic(ctx, T, seed=0, density=1.0, near=True, far=True, mid=True, y_ba
         flip = vx < 0
         pitch = -math.atan2(vy, abs(vx))
         bank = 0.08 * math.sin(T + P["rs"] * 6)
+        if P["man"] == "turn":                             # rolled into the turn: the wings show
+            bank = math.copysign(P["bank"], P["w"]) * min(1.0, a / 0.35) + 0.08 * math.sin(T * 3 + P["rs"])
+        elif P["man"] == "roll":                           # aileron roll
+            bank = P["rollrate"] * max(0.0, a - 0.3)
         if st == "burning":
             bank = 0.5 * math.sin(a * P["roll"])
         A.aircraft(ctx, P["kind"], p[0], p[1], P["size"], pitch=pitch, flip=flip, bank=bank,
@@ -326,13 +413,13 @@ def air_traffic(ctx, T, seed=0, density=1.0, near=True, far=True, mid=True, y_ba
                 cp = -math.atan2(cvy, abs(cvx))
                 A.aircraft(ctx, other, q[0], q[1], P["size"] * 0.95, pitch=cp, flip=cvx < 0, prop_t=T,
                            light=RED_LIGHT, light_amt=0.4, haze=HAZE, haze_amt=haze)
-                if (T * 2.5 + P["rs"]) % 1 < 0.45:          # short bursts toward the target
-                    dx, dy = p[0] - q[0], p[1] - q[1]
-                    for k in range(4):
-                        ph = (T * 7 + k / 4) % 1
-                        tx, ty = q[0] + dx * ph, q[1] + dy * ph
-                        line(ctx, [(tx, ty), (tx + dx * 0.08, ty + dy * 0.08)], "#ffe6a0",
-                             max(1.5, P["size"] * 0.012), 0.9 * (1 - haze))
+                if (T * 2.5 + P["rs"]) % 1 < 0.45:          # short bursts: flash at the guns, tracers flying out
+                    cn = math.hypot(cvx, cvy) or 1
+                    ang = math.atan2(cvy, cvx)
+                    mx, my = q[0] + cvx / cn * P["size"] * 0.46, q[1] + cvy / cn * P["size"] * 0.46
+                    gun_flash(ctx, mx, my, ang, P["size"] * 0.07, T, seed=f.seed)
+                    burst(ctx, mx, my, ang, T, seed=f.seed, n=4, speed=2400, reach=P["size"] * 3.2,
+                          length=P["size"] * 0.3, width=max(1.5, P["size"] * 0.012), a=0.9 * (1 - haze))
     if near:
         # a big close pass every ~1.6 s, with speed streaks, flying where its nose points
         period = 1.1
@@ -422,10 +509,10 @@ def battle_sky(ctx, T, scroll=0.0, tilt=0.0, smoke=True, bombers=None, flak_n=10
     sun(ctx, 1450, 700, 60, 1.0)
     L.sky_clouds(ctx, T, RED_TONES, seed=31 + seed, scroll=scroll * 0.8, speed=cloud_speed, haze=HAZE, horizon=760)
     if smoke:
-        fx.smoke(ctx, 300, 1100, 900, 60, "#2a0c0c", seed=33, t=T, a=0.55, lean=0.35)
-        fx.smoke(ctx, 1650, 1100, 700, 45, "#2a0c0c", seed=34, t=T, a=0.45, lean=-0.2)
-        fx.smoke(ctx, 880, 1000, 620, 30, mix("#2a0c0c", HAZE, 0.35), seed=36, t=T, a=0.4, lean=0.15)
-        fx.smoke(ctx, 1260, 980, 520, 24, mix("#2a0c0c", HAZE, 0.5), seed=37, t=T, a=0.35, lean=-0.1)
+        fx.smoke(ctx, 300, 1100, 900, 60, "#2a0c0c", seed=33, t=T, a=0.95, lean=0.35)
+        fx.smoke(ctx, 1650, 1100, 700, 45, "#2a0c0c", seed=34, t=T, a=0.85, lean=-0.2)
+        fx.smoke(ctx, 880, 1000, 620, 30, mix("#2a0c0c", HAZE, 0.35), seed=36, t=T, a=0.7, lean=0.15)
+        fx.smoke(ctx, 1260, 980, 520, 24, mix("#2a0c0c", HAZE, 0.5), seed=37, t=T, a=0.6, lean=-0.1)
     rnd = random.Random(35 + seed)
     for _ in range(int(flak_n * 1.6)):
         from silhouette_kit.core import flak
@@ -676,12 +763,15 @@ def shot_chase(ctx, u, T, hit_wingman=0.0):
     battle_sky(ctx, T, scroll=u * 400, smoke=True, flak_n=5, seed=11, traffic=0.6)
     A.aircraft(ctx, "spitfire", 1280 + u * 80, 520 + 20 * math.sin(T * 2), 300, pitch=0.06, bank=0.1, prop_t=T,
                light=RED_LIGHT, light_amt=0.45)
-    A.aircraft(ctx, "bf109", 560 + u * 200, 580 + 15 * math.sin(T * 2.4), 280, pitch=0.02, prop_t=T,
-               light=RED_LIGHT, light_amt=0.45)
-    for k in range(6):
-        ph = (T * 6 + k / 6) % 1
-        x0 = 700 + u * 200 + ph * 800
-        line(ctx, [(x0, 575 - ph * 60 + k * 3), (x0 + 90, 568 - ph * 60 + k * 3)], "#ffe6a0", 3, 0.9)
+    ex, ey = 560 + u * 200, 580 + 15 * math.sin(T * 2.4)
+    A.aircraft(ctx, "bf109", ex, ey, 280, pitch=0.02, bank=0.12, prop_t=T, light=RED_LIGHT, light_amt=0.45)
+    tx, ty = 1280 + u * 80 - 110, 520 + 20 * math.sin(T * 2)               # aiming at the Spitfire's tail
+    for gy in (-8, 6):                                                     # nose guns: flash + tracers
+        mx, my = ex + 138, ey + gy
+        ang = math.atan2(ty - my, tx - mx)
+        gun_flash(ctx, mx, my, ang, 20, T, seed=gy)
+        burst(ctx, mx, my, ang, T, seed=40 + gy, n=6, speed=2800, reach=1200, length=100, width=3, spread=0.03,
+              target=(tx, ty), p_hit=0.3)
     speed_layer(ctx, T, seed=11, amount=1.0, rate=1.2)
 
 
@@ -692,29 +782,42 @@ def shot_attack(ctx, u, T):
     if u > 0.15:
         streaming(ctx, T, (bx, by), bp, 700, nose=280 * 0.4, size=280, life=1.2, a=0.5, seed=90, fire=u > 0.4)
     A.aircraft(ctx, "bf109", bx, by, 280, pitch=bp, prop_t=T, damage=u, light=RED_LIGHT, light_amt=0.45)
-    A.aircraft(ctx, "spitfire", 380 + u * 380, 260 + u * 200, 330, pitch=-0.4, bank=-0.15, prop_t=T,
-               light=RED_LIGHT, light_amt=0.45)
-    fx.tracers(ctx, T, 93, n=8, x0=560 + u * 380, y0=360 + u * 200, ang=0.38, spread=20, speed=3000)
+    sx, sy, sz = 380 + u * 380, 260 + u * 200, 330
+    A.aircraft(ctx, "spitfire", sx, sy, sz, pitch=-0.4, bank=-0.35, prop_t=T, light=RED_LIGHT, light_amt=0.45)
+    ca, sa = math.cos(0.4), math.sin(0.4)                                  # nose direction (diving right)
+    for side in (-1, 1):                                                   # wing guns either side of the nose
+        mx = sx + ca * sz * 0.3 - sa * side * sz * 0.07
+        my = sy + sa * sz * 0.3 + ca * side * sz * 0.07
+        ang = math.atan2(by - my, bx - mx)
+        gun_flash(ctx, mx, my, ang, 22, T, seed=side + 5)
+        burst(ctx, mx, my, ang, T, seed=93 + side, n=7, speed=3000, reach=1100, length=110, width=3, spread=0.03,
+              target=(bx, by), p_hit=0.55)
     speed_layer(ctx, T, seed=13, amount=1.0, rate=1.2)
 
 
 def shot_hit(ctx, u, T):
-    """Tracers rake our own Spitfire: sparks, holes, a jolt."""
+    """A 109 dives in from behind and above: flashes at its guns, tracers converge on our Spitfire and spark on
+    the fuselage, some whip past; holes, a jolt."""
     battle_sky(ctx, T, scroll=u * 200, smoke=True, flak_n=6, seed=15, traffic=0.6, near=False)
     jolt = 14 * math.exp(-u * 6) * math.sin(T * 60)
     if u > 0.2:
         streaming(ctx, T, (960, 540), 0.05 + 0.1 * u, 900, nose=520 * 0.42, size=520, life=0.9,
                   a=0.35 * min(1, (u - 0.2) * 4), seed=91)
+    # the 109 that got him: diving in from behind and above, guns blazing
+    ax, ay, asz = 170 + u * 260, 210 + u * 70, 340
+    A.aircraft(ctx, "bf109", ax, ay, asz, pitch=-0.28, bank=0.3, prop_t=T, light=RED_LIGHT, light_amt=0.45)
     A.aircraft(ctx, "spitfire", 960 + jolt, 540, 520, pitch=0.05 + 0.1 * u, prop_t=T, damage=min(1.0, u * 2),
                light=RED_LIGHT, light_amt=0.45)
-    for k in range(9):
-        ph = (T * 5 + k / 9) % 1
-        x0 = -100 + ph * 1400
-        line(ctx, [(x0, 420 + k * 18), (x0 + 120, 430 + k * 18)], "#ffe6a0", 3, 0.9)
-    rnd = random.Random(int(T * 20))
-    for _ in range(10):
-        px, py = 900 + rnd.uniform(-200, 100), 540 + rnd.uniform(-40, 30)
-        line(ctx, [(px, py), (px + rnd.uniform(-30, 30), py + rnd.uniform(-30, 30))], "#ffd070", 2, 0.9)
+    ca, sa = math.cos(0.28), math.sin(0.28)
+    for j, (along, side) in enumerate(((0.48, 0.0), (0.28, -0.08), (0.28, 0.08))):   # nose guns + wing cannon
+        mx = ax + ca * asz * along - sa * side * asz
+        my = ay + sa * asz * along + ca * side * asz
+        tx, ty = 900 + jolt, 530
+        ang = math.atan2(ty - my, tx - mx)
+        if u < 0.75:
+            gun_flash(ctx, mx, my, ang, 24, T, seed=j)
+            burst(ctx, mx, my, ang, T, seed=60 + j, n=6, speed=3000, reach=1300, length=120, width=3.5,
+                  spread=0.035, target=(tx, ty), p_hit=0.6)
     speed_layer(ctx, T, seed=15, amount=1.0, rate=1.2)
 
 
@@ -762,7 +865,41 @@ def ground_rush(ctx, T, alt, redness, horizon=200, speed=40.0, seed=0, wrecks=((
             line(ctx, [(cx + X0 * f / zf, yt), (cx + X0 * f / zn, yb)], hedge, max(1.0, 30 / zn), 0.9)
             if rk.random() < 0.18:                                 # a tree on the hedge corner
                 circle(ctx, cx + X0 * f / zn, yb - 0.45 * f / zn, 0.55 * f / zn, trees, 0.9)
+            P = lambda ax, bz: (cx + (X0 + (X1 - X0) * ax) * f / (zn + (zf - zn) * bz), Y(zn + (zf - zn) * bz))
+            kind = rk.random()
+            if kind < 0.11:                                        # a copse: dark wood full of tree crowns
+                fill_poly(ctx, [P(0.08, 0.1), P(0.9, 0.05), P(0.95, 0.85), P(0.1, 0.9)], mix(trees, col, 0.35))
+                for _ in range(9):
+                    tx_, ty_ = P(rk.uniform(0.1, 0.9), rk.uniform(0.1, 0.85))
+                    circle(ctx, tx_, ty_, rk.uniform(0.5, 0.8) * f / zn, trees, 0.95)
+            elif kind < 0.19:                                      # a farm: tiled roofs and a round oast kiln
+                roof = mix("#8a4a32", "#5a2018", redness * 0.5)
+                for hx_, hz_ in ((0.35, 0.4), (0.6, 0.55)):
+                    fill_poly(ctx, [P(hx_ - 0.12, hz_ - 0.1), P(hx_ + 0.12, hz_ - 0.1), P(hx_ + 0.12, hz_ + 0.1),
+                                    P(hx_ - 0.12, hz_ + 0.1)], roof)
+                    line(ctx, [P(hx_ - 0.12, hz_), P(hx_ + 0.12, hz_)], mix(roof, "#000000", 0.35), max(1, 8 / zn))
+                ox_, oy_ = P(0.75, 0.3)
+                circle(ctx, ox_, oy_, 0.9 * f / zn, mix(KENT["oast"], "#3a1414", redness * 0.5))
+                circle(ctx, ox_, oy_, 0.35 * f / zn, "#efe6d2", 0.9)
+                fill_poly(ctx, [P(0.2, 0.75), P(0.8, 0.75), P(0.8, 0.82), P(0.2, 0.82)], "#d8c8a0", 0.7)   # yard
         line(ctx, [(-W, yb), (W * 2, yb)], hedge, max(1.0, 40 / zn), 0.95)
+    # a winding river and a country lane, following the land in world space
+    zs = [zmin + (min(zmax, 360.0) - zmin) * (i / 70) ** 2 for i in range(71)]
+    for Xf, wdt, colr, edge in ((lambda Z: -55 + 30 * math.sin(Z * 0.008 + 1.0), 3.2,
+                                 mix("#a8b4b0", "#b0584a", redness), mix("#4a4a30", "#2a0c0a", redness)),
+                                (lambda Z: 18 + 16 * math.sin(Z * 0.013 + seed), 0.9,
+                                 mix("#dccb9c", "#b07050", redness * 0.6), None)):
+        for ww, cc, al in (((wdt * 1.6, edge, 0.8),) if edge else ()) + ((wdt, colr, 0.95),):
+            left = [(cx + (Xf(z + trav) - ww / 2) * f / z, Y(z)) for z in zs]
+            right = [(cx + (Xf(z + trav) + ww / 2) * f / z, Y(z)) for z in zs]
+            fill_poly(ctx, left + right[::-1], cc, al)             # a ribbon in perspective, wider when near
+    for i in range(4):                                             # cloud shadows drifting over the fields
+        rr = random.Random(seed * 17 + i)
+        Zw = rr.uniform(0, 400)
+        z = (Zw - trav) % 400 + zmin + 5
+        X = rr.uniform(-60, 60) + T * 2
+        ctx.save(); ctx.translate(cx + X * f / z, Y(z)); ctx.scale(22 * f / z, 7 * f / z)
+        ctx.arc(0, 0, 1, 0, TAU); ctx.restore(); src(ctx, "#1a0c08", 0.14); ctx.fill()
     for X, Zw in wrecks:                                           # burning wrecks on the ground
         z = (Zw - trav) % 260 + max(zmin, 8)
         if z < 30:                                                 # too close: it has passed under us
