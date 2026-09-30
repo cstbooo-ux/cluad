@@ -133,6 +133,22 @@ def ending_shot(ctx, t):
     S.shot_ending_grass(ctx, 0, t, pick=pick)
 
 
+# the fall after the spin: the burning Spitfire intercut with the paper plane from 1930 falling in the same
+# place at the same angle - his memory. Cuts on the beat, quickening at the end; it ends on the paper plane.
+FALL_CUTS = [22, 23, 24, 25, 26, 27, 28, 29, 29.5, 30, 30.5, 31]
+
+
+def _fall_shot(memory):
+    return lambda c, t: S.shot_fall_closeup(c, 0, t, lin(t, beat(22), END), memory=memory)
+
+
+FALL_MONTAGE = []
+for n_, b_ in enumerate(FALL_CUTS):
+    t1_ = beat(FALL_CUTS[n_ + 1]) if n_ + 1 < len(FALL_CUTS) else END
+    mem_ = n_ % 2 == 1
+    FALL_MONTAGE.append((beat(b_), t1_, _fall_shot(mem_),
+                         dict(shake=0.6, zoom=(1.0, 1.03), soft=True) if mem_ else dict(shake=6.0, zoom=(1.0, 1.05))))
+
 # (start, end, draw(ctx, t), camera)
 #   camera: zoom=(z0, z1) over the shot, center=(x, y), shake=base jitter px, roll=(r0, r1) radians, grade
 TL = [
@@ -154,15 +170,7 @@ TL = [
     (beat(16.5), beat(17), lambda c, t: S.shot_cockpit(c, 0.5, t, jaw=0.2, look=0.12), dict(zoom=(1.04, 1.06), shake=1.0)),
     (beat(17), beat(19), hit_shot, dict(shake=6.0)),
     (beat(19), beat(22), lambda c, t: S.shot_spiral(c, lin(t, beat(19), beat(22)), t), dict(shake=6.0, zoom=(1.0, 1.1))),
-    (beat(22), beat(24), lambda c, t: S.shot_cockpit_fall(c, 0.15 + 0.35 * lin(t, beat(22), beat(24)), t),
-     dict(shake=8.0, zoom=(1.0, 1.1))),
-    (beat(24), beat(27), lambda c, t: S.shot_dive(c, 0.7 * lin(t, beat(24), beat(27)), t),
-     dict(shake=7.0, roll=(0.0, 0.05), zoom=(1.0, 1.1))),
-    (beat(27), beat(29), lambda c, t: S.shot_tree(c, lin(t, beat(27), beat(29)), t), dict(shake=8.0)),
-    (beat(29), beat(30), lambda c, t: S.shot_cockpit_fall(c, 0.85 + 0.15 * lin(t, beat(29), beat(30)), t),
-     dict(shake=10.0, zoom=(1.08, 1.18))),
-    (beat(30), END, lambda c, t: S.shot_dive(c, 0.7 + 0.3 * lin(t, beat(30), END), t),
-     dict(shake=12.0, zoom=(1.0, 1.25), roll=(0.1, 0.16))),
+    *FALL_MONTAGE,
     (END, DUR + 1, ending_shot, dict()),
 ]
 
@@ -172,8 +180,8 @@ IMPACTS = [(DROP, 1.8, "#ffffff"), (beat(17), 2.0, "#ff5a30"), (END, 1.2, "#fff4
 for t_, st_ in ((8.4, 0.18), (9.9, 0.18), (11.2, 0.3), (11.86, 0.25), (12.2, 0.3), (12.37, 0.3), (12.85, 0.4),
                 (13.22, 0.5)):                              # turbulence jolts as clouds whip past before the drop
     IMPACTS.append((t_, st_, None))
-for s_ in TL[3:-1]:                                          # every climax cut
-    if s_[0] not in (beat(17), DROP):
+for s_ in TL[3:-1]:                                          # every climax cut (memory cuts stay soft)
+    if s_[0] not in (beat(17), DROP) and not s_[3].get("soft"):
         IMPACTS.append((s_[0], 0.55, None))
 for h_t, h_s in MUSIC["hits"]:                              # strong accents inside the climax
     if DROP + 0.3 < h_t < END - 0.1 and h_s > 1.0:
@@ -233,7 +241,7 @@ def camera(t, i):
         z += 0.012 * math.exp(-dt / 0.08)
     sx = amp * (math.sin(t * 91.3) * 0.6 + math.sin(t * 57.1 + 1.3) * 0.4)
     sy = amp * (math.cos(t * 83.7) * 0.6 + math.sin(t * 41.9 + 0.7) * 0.4)
-    if DROP + 0.4 <= t < END:                               # handheld buffeting in the fight: slow sway + roll
+    if DROP + 0.4 <= t < END and not cam.get("soft"):     # handheld buffeting in the fight: slow sway + roll
         sx += 11 * (math.sin(t * 3.1) * 0.6 + math.sin(t * 7.3 + 0.4) * 0.4)
         sy += 9 * (math.sin(t * 2.6 + 1.1) * 0.6 + math.sin(t * 6.1 + 2.0) * 0.4)
         roll += 0.009 * math.sin(t * 2.2 + 0.5) + 0.004 * math.sin(t * 5.7)

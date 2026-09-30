@@ -196,8 +196,19 @@ def build(out, TL, IMPACTS, beat, DROP, END, DUR):
     amb.add(fire(fall_d, 714, size=0.7), beat(19), gain=0.3)                                  # engine on fire
     for tt in (beat(19) + 1.3, beat(24)):                                                      # through the cloud
         ev.add(whoosh(0.9, int(tt * 7), up=False, lo=200, hi=4000), tt, gain=0.45)
-    ev.add(bp(pink(0.9, 711), 400, 6000) * env(ns(0.9), 0.1, 0.3), beat(27) + 0.5, gain=0.5)     # through the oak
     ev.add(whoosh(END - beat(29), 712, up=True, lo=200, hi=7000), beat(29), gain=0.6)
+
+    # the memory cuts in the fall: the battle drops away to a hush, a soft wind and the paper plane's flutter
+    for st_, en_, _, cam_ in TL:
+        if cam_.get("soft") and beat(19) < st_ < END:
+            i0, i1 = ns(st_), ns(en_)
+            f = min(ns(0.06), (i1 - i0) // 3)
+            g = np.full(i1 - i0, 0.22, np.float32)
+            g[:f] = np.linspace(1, 0.22, f); g[-f:] = np.linspace(0.22, 1, f)
+            for m in (amb, ev):
+                m.buf[i0:i1] *= g[:, None] if m.buf.ndim == 2 else g
+            amb.add(paper_flutter(en_ - st_, int(st_ * 100)), st_, gain=0.35)
+            amb.add(wind(en_ - st_, int(st_ * 101), strength=0.15), st_, gain=0.4)
 
     # hard cut at END: every battle sound stops dead
     for m in (amb, ev):

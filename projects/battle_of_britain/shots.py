@@ -721,7 +721,7 @@ def shot_hit(ctx, u, T):
 FIELD_COLS = ("#a08e60", "#c4ae70", "#7d7a44", "#5f6a38", "#c9b98a", "#8a7446", "#4f5a30", "#b09a58")
 
 
-def ground_rush(ctx, T, alt, redness, horizon=200, speed=40.0, seed=0, wrecks=((6, 70), (-30, 140))):
+def ground_rush(ctx, T, alt, redness, horizon=200, speed=40.0, seed=0, wrecks=((6, 70), (-30, 140)), haze=None):
     """Kent seen from a falling aircraft, in real perspective: a patchwork of fields, hedgerows and trees on a
     ground plane `alt` world units below the camera, streaming toward it at `speed` units/s. As alt drops the
     fields swell and rush past - the ground coming up. wrecks: (x, distance) of burning wrecks on the ground."""
@@ -771,26 +771,44 @@ def ground_rush(ctx, T, alt, redness, horizon=200, speed=40.0, seed=0, wrecks=((
         x, y = cx + X * sc, Y(z)
         fx.smoke(ctx, x, y, 60 * sc, 5 * sc, "#2a1210", seed=int(X * 7) + 5, t=T, a=0.55, lean=0.35, rise=30)
         fx.flames(ctx, x, y, 3 * sc, 3 * sc, T, seed=int(X) % 50)
-    g = cairo.LinearGradient(0, horizon, 0, horizon + 260)      # aerial haze at the horizon
-    hz = hx(mix("#e8c890", HAZE, redness))
-    g.add_color_stop_rgba(0, *hz, 0.85); g.add_color_stop_rgba(1, *hz, 0.0)
-    ctx.rectangle(-W, horizon, W * 3, 260); ctx.set_source(g); ctx.fill()
+    g = cairo.LinearGradient(0, horizon - 160, 0, horizon + 260)  # aerial haze melting sky and ground together
+    hz = hx(haze) if haze else hx(mix("#e8c890", HAZE, redness))
+    g.add_color_stop_rgba(0, *hz, 0.0); g.add_color_stop_rgba(0.38, *hz, 0.9); g.add_color_stop_rgba(1, *hz, 0.0)
+    ctx.rectangle(-W, horizon - 160, W * 3, 420); ctx.set_source(g); ctx.fill()
 
 
-def rushing_clouds(ctx, T, amount=1.0, tones=None, seed=0, up=1700.0, n=6):
-    """Cloud masses racing upward past the camera (we are falling through them)."""
+def rushing_clouds(ctx, T, amount=1.0, tones=None, seed=0, up=600.0, n=6, size=(1100, 1900)):
+    """Cloud masses drifting upward past the camera at `up` px/s (we are falling through them)."""
     if amount <= 0.01:
         return
     from silhouette_kit import clouds as CL
     tones = tones or RED_TONES
     for k in range(n):
         r = random.Random(seed * 131 + k)
-        per = r.uniform(0.7, 1.1)
-        ph = (T / per + r.random()) % 1
-        wd = r.uniform(1100, 1900)
+        wd = r.uniform(*size)
+        span = H + wd * 1.4
+        y = H + wd * 0.7 - ((r.random() * span + T * up * r.uniform(0.85, 1.15)) % span)
         x = r.uniform(-200, W + 200)
-        y = H + wd * 0.6 - ph * (H + wd * 1.2) * (up / 1700)
         CL.draw(ctx, x, y, wd, tones, CL.pick(r.randrange(10 ** 6), 0.5), 0.85 * amount, stretch=1.2)
+
+
+def cloud_interior(ctx, T, u=0.0, speed=1.0, seed=0, thin=0.0):
+    """Inside the cloud band: diffuse red-lit mist with cloud masses at three depths drifting UP past the camera
+    (slow far away, faster close by). thin 0..1 opens the cloud: the mist clears, the masses thin out."""
+    hz = 1 - 0.8 * thin
+    vgrad(ctx, 0, H, [(0, mix("#d89070", "#b35a40", thin)), (0.55, mix("#b0604a", "#8a3c30", thin)),
+                      (1, mix("#7a3430", "#4a1c1c", thin))])
+    glow(ctx, W * 0.7, -100, 900, "#ffc890", 0.35 * hz)                          # the sun, diffused in the cloud
+    mist = [mix(c, "#c07058", 0.55) for c in RED_TONES]
+    mid = [mix(c, "#b86850", 0.3) for c in RED_TONES]
+    rushing_clouds(ctx, T, amount=0.7 * hz, tones=mist, seed=seed + 1, up=140 * speed, n=6, size=(700, 1200))
+    rushing_clouds(ctx, T, amount=0.85 * (1 - 0.6 * thin), tones=mid, seed=seed + 2, up=320 * speed, n=5,
+                   size=(1100, 1700))
+
+
+def cloud_near(ctx, T, speed=1.0, seed=0, thin=0.0):
+    """The nearest wisps, passing in front of the plane."""
+    rushing_clouds(ctx, T, amount=0.75 * (1 - thin), seed=seed + 3, up=750 * speed, n=2, size=(1600, 2200))
 
 
 def falling_plane(ctx, T, x, y, size, pitch, roll_rate=5.0, redness=1.0, seed=95):
@@ -812,48 +830,82 @@ def falling_plane(ctx, T, x, y, size, pitch, roll_rate=5.0, redness=1.0, seed=95
 def shot_spiral(ctx, u, T):
     """Hit and going down: the Spitfire spins out of the fight and plunges into the cloud band below,
     the clouds rushing UP past the camera, the world turning around it."""
-    spin = -0.25 - 1.3 * ease(u) - 0.1 * math.sin(T * 2)
+    spin = -0.2 - 0.55 * ease(u) - 0.06 * math.sin(T * 1.5)
     ctx.save()
-    ctx.translate(W / 2, H / 2); ctx.rotate(spin); ctx.scale(1.6, 1.6); ctx.translate(-W / 2, -H / 2)
+    ctx.translate(W / 2, H / 2); ctx.rotate(spin); ctx.scale(2.0, 2.0); ctx.translate(-W / 2, -H / 2)
     sky(ctx, 1.0)
     sun(ctx, 1450, 700 - u * 900, 60, 1.0)
     L.sky_clouds(ctx, T, RED_TONES, seed=31, speed=6, haze=HAZE, horizon=760 - u * 1100)
     for i in range(4):                                             # the fight left behind, receding upward
         A.aircraft(ctx, ("bf109", "spitfire")[i % 2], 300 + i * 420 + T * 60, 260 - u * 700 + i * 50, 120 - i * 10,
                    pitch=0.1, flip=i % 2 == 0, prop_t=T, haze=HAZE, haze_amt=0.5, light=RED_LIGHT, light_amt=0.3)
-    rushing_clouds(ctx, T, amount=min(1.0, u * 2.5), seed=3)
+    rushing_clouds(ctx, T, amount=min(1.0, u * 2.5), seed=3, up=450)
     ctx.restore()
-    falling_plane(ctx, T, 960 + 20 * math.sin(T * 3), 520, 420, -0.95 + 0.12 * math.sin(T * 2.3), roll_rate=6)
+    falling_plane(ctx, T, 960 + 20 * math.sin(T * 1.5), 520, 420, -1.2 - 0.25 * ease(u) + 0.06 * math.sin(T * 2.3),
+                  roll_rate=3)
     if u > 0.6:                                                    # into the cloud: everything whites out red
         rect(ctx, 0, 0, W, H, mix("#d88a70", HAZE, 0.3), 0.85 * ease((u - 0.6) / 0.4))
 
 
-def shot_dive(ctx, u, T):
-    """Below the cloud: the Kent fields rush up at a steep angle; burning wrecks, a 109 gliding in, our plane
-    streaming fire straight down at them.  u 0 -> 1: from breaking out of the cloud to the last second."""
-    redness = 1.0 - 0.45 * u
-    tilt = 0.3 + 0.12 * math.sin(T * 0.9) + 0.25 * u
-    alt = 2.5 + 55 * (1 - u) ** 1.6
+def shot_cloud_fall(ctx, u, T):
+    """Falling inside the cloud: the Spitfire points straight down, fire at the nose and its smoke streaming up
+    behind it, the cloud drifting up past at three depths. Near the end (u -> 1) the cloud opens and the Kent
+    fields appear far below."""
+    thin = max(0.0, (u - 0.72) / 0.28)
     ctx.save()
-    ctx.translate(W / 2, H / 2); ctx.rotate(tilt); ctx.scale(1.5, 1.5); ctx.translate(-W / 2, -H / 2)
-    sky(ctx, redness)
-    ground_rush(ctx, T, alt, redness, horizon=150 - 60 * u, speed=30 + 90 * u, seed=4)
-    gx, gy = 1500 - u * 700, 330 + u * 120                                             # a 109 gliding in
-    streaming(ctx, T, (gx, gy), -0.2, 260, nose=60, size=150, life=0.6, a=0.3, seed=92, flip=True)
-    A.aircraft(ctx, "bf109", gx, gy, 150, pitch=-0.2, flip=True, prop_t=0, damage=0.6, light=RED_LIGHT,
-               light_amt=0.3 * redness, haze=HAZE, haze_amt=0.25)
-    rushing_clouds(ctx, T, amount=max(0.0, 1 - u * 6), tones=L.tones_mix("gold", "red", redness), seed=5)
+    ctx.translate(W / 2, H / 2); ctx.rotate(0.12 * math.sin(T * 0.7)); ctx.scale(1.25, 1.25); ctx.translate(-W / 2, -H / 2)
+    if thin > 0:                                                   # the ground far below, through the thinning cloud
+        ground_rush(ctx, T, 55 - 20 * thin, 0.6, horizon=-500, speed=6, seed=4)
+        ctx.push_group()
+    cloud_interior(ctx, T, u, seed=21, thin=thin)
+    if thin > 0:
+        ctx.pop_group_to_source(); ctx.paint_with_alpha(1 - 0.75 * thin)
     ctx.restore()
-    if u < 0.15:                                                   # breaking out of the cloud bottom
-        rect(ctx, 0, 0, W, H, mix("#d88a70", HAZE, 0.3), 0.85 * (1 - u / 0.15))
-    falling_plane(ctx, T, 900 + 30 * math.sin(T * 3), 470 + 12 * math.sin(T * 1.7), 380 + 80 * u,
-                  -0.75 + 0.05 * math.sin(T * 2.1), roll_rate=4, redness=redness, seed=95)
-    for k in range(10):                                            # speed streaks
+    x, y = 960 + 40 * math.sin(T * 0.9), 500 + 15 * math.sin(T * 1.3)
+    falling_plane(ctx, T, x, y, 440, -1.48 + 0.07 * math.sin(T * 1.7), roll_rate=2.5, redness=1.0, seed=95)
+    cloud_near(ctx, T, seed=21, thin=thin)
+    for k in range(8):                                             # rain of droplets / streaks rising past
         rr = random.Random(k * 17)
-        ph = (T * rr.uniform(1.5, 2.5) + rr.random()) % 1
+        ph = (T * rr.uniform(0.9, 1.4) + rr.random()) % 1
         x0 = rr.uniform(0, W)
         y0 = H + 100 - ph * (H + 400)
-        line(ctx, [(x0, y0), (x0 - 40, y0 - 260)], "#ffe0c0", 2, 0.25 * (1 - ph))
+        line(ctx, [(x0, y0), (x0, y0 - 180)], "#ffe0c0", 2, 0.18 * (1 - ph) * (1 - thin))
+
+
+def shot_fall_closeup(ctx, u, T, k, memory=False):
+    """The falling close-up, intercut: our burning Spitfire (memory=False) or - in his memory - the paper plane
+    from 1930 (memory=True), in exactly the same place on screen, at the same nose-down angle.
+    The world moves along the line of the fall (clouds rising past, then the fields far below slowly coming up).
+    k: 0 -> 1 progress through the whole fall (shared by both, so the two descents stay in step)."""
+    a = -0.62 + 0.07 * math.sin(T * 1.3)                    # frame 'up' = straight back along the flight path
+    redness = 0.0 if memory else 1.0 - 0.35 * k
+    tones = L.CLOUD_TONES["gold"] if memory else L.tones_mix("gold", "red", 1.0 - 0.3 * k)
+    ctx.save()
+    ctx.translate(W / 2, H / 2); ctx.rotate(a); ctx.scale(2.0, 2.0); ctx.translate(-W / 2, -H / 2)
+    sky(ctx, redness)
+    sun(ctx, 1480, 260 + 200 * k, 70, redness)
+    kk = max(0.0, (k - 0.25) / 0.75)
+    if kk > 0:                                               # below the cloud: the fields far below, coming up
+        ground_rush(ctx, T, 320 - 270 * kk, redness, horizon=760 - 320 * kk, speed=5 + 6 * kk, seed=21,
+                    wrecks=() if memory else ((6, 90), (-40, 160)), haze="#f0d8a0" if memory else None)
+    cloud_amt = 1.0 if (k < 0.3 or memory) else 0.8
+    rushing_clouds(ctx, T, amount=cloud_amt, tones=tones, seed=23 if memory else 3, up=650, n=7)
+    if k < 0.25:                                             # still inside the cloud: a veil of haze
+        rect(ctx, 0, 0, W, H, "#f4e2c0" if memory else mix("#d88a70", HAZE, 0.3), 0.45 * (1 - k / 0.25))
+    ctx.restore()
+    x, y = 960 + 18 * math.sin(T * 2.7), 520 + 8 * math.sin(T * 1.9)
+    pitch = -0.95 + 0.08 * math.sin(T * 2.3)
+    if memory:
+        for j in range(5):                                   # thin air lines streaming off the paper
+            rr = random.Random(j * 13)
+            ph = (T * 1.3 + rr.random()) % 1
+            dx, dy = -math.cos(pitch), math.sin(pitch)
+            ox = x + rr.uniform(-120, 120) + dx * ph * 500
+            oy = y + rr.uniform(-60, 60) - abs(dy) * ph * 500
+            line(ctx, [(ox, oy), (ox + dx * 160, oy - abs(dy) * 160)], "#fffaf0", 2, 0.35 * (1 - ph))
+        A.paper_plane(ctx, x, y, 470, pitch=pitch)
+    else:
+        falling_plane(ctx, T, x, y, 420, pitch, roll_rate=6, redness=redness)
 
 
 def shot_tree(ctx, u, T):
@@ -878,15 +930,16 @@ def shot_cockpit_fall(ctx, u, T):
     """Inside, going down: the world spins outside the canopy, cloud then fields rushing UP past the glass,
     smoke pouring by, fire light flickering on him, the airframe shaking; he fights the stick.
     u: 0 = still high, in cloud .. 1 = the ground right there."""
-    spin = 0.9 + T * 1.1
-    alt = 3.0 + 60 * (1 - u) ** 1.5
+    spin = 0.5 + 0.35 * math.sin(T * 0.8)
     ctx.save()
     ctx.translate(W / 2, H / 2); ctx.rotate(spin); ctx.scale(1.7, 1.7); ctx.translate(-W / 2, -H / 2)
-    sky(ctx, 1.0 - 0.4 * u)
-    ground_rush(ctx, T, alt, 1.0 - 0.4 * u, horizon=260, speed=40 + 80 * u, seed=8)
-    rushing_clouds(ctx, T, amount=max(0.0, 1 - u * 1.6), seed=9, up=2600)
+    if u < 0.8:                                                    # inside the cloud
+        cloud_interior(ctx, T, u, speed=1.3, seed=31)
+    else:                                                          # out of it: the fields right below
+        sky(ctx, 0.6)
+        ground_rush(ctx, T, 3.0 + 40 * (1 - u), 0.6, horizon=260, speed=18, seed=8)
     ctx.restore()
-    rushing_clouds(ctx, T + 0.3, amount=0.7, tones=SMOKE_TONES, seed=11, up=3000, n=3)       # smoke pouring past
+    rushing_clouds(ctx, T + 0.3, amount=0.6, tones=SMOKE_TONES, seed=11, up=900, n=3)        # smoke pouring past
     flick = 0.6 + 0.4 * math.sin(T * 23) * math.sin(T * 7.3)
     glow(ctx, 1750, 900, 900, "#ff7030", 0.35 * flick)                                         # engine fire light
     sh = 9 * math.sin(T * 41) + 6 * math.sin(T * 27 + 1)
