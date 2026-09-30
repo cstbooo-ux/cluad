@@ -180,12 +180,10 @@ def tones_mix(a, b, t):
 
 
 def cumulus_rich(ctx, x, y, w, tones, seed, a=1.0, light=(0.55, -0.85), tower=0.6, t=0.0):
-    """Particle (smoke-puff) cumulus, see smokecloud.py: underside around y, w wide,
+    """Cumulus from the lit 3-D sprite library (clouds.py): base around y, w wide,
     coloured with tones = (shadow, body, lit, highlight)."""
-    from . import smokecloud
-    w = w * 1.1
-    smokecloud.merged(ctx, (x - w * 0.75, y - w * 0.9, x + w * 0.75, y + w * 0.35),
-                      lambda c: smokecloud.cloud(c, x, y, w, tones, seed, t, a=a, tower=tower))
+    from . import clouds
+    clouds.draw(ctx, x, y, w * 1.1, tones, clouds.pick(seed, tower), a)
 
 
 def cumulus_cel(ctx, x, y, w, tones, seed, a=1.0, light=(0.55, -0.85), tower=0.6, t=0.0):
@@ -260,48 +258,55 @@ def cirrus(ctx, y0, y1, tone, seed, t=0.0, a=0.35, n=14):
 
 
 def cloud_deck(ctx, T, tones, seed=0, horizon=820, scroll=0.0, speed=1.0, haze=None, density=1.0, scale=1.0, a=1.0):
-    """One continuous far cloud field around the horizon. Clouds are scattered in depth: the farthest (top) rows
-    are small and hazy, nearer rows lower down are bigger, denser and clearer, so the mass is thickest below and
-    both its top and bottom edges are irregular. Drawn far-to-near so nearer clouds overlap the ones behind.
-    Every cloud is a particle emitter of smoke puffs (smokecloud.py), so the whole bank slowly churns.
-    `scroll` is the horizontal camera offset in px (already scaled for distance); drift is slow."""
-    from . import smokecloud
+    """A far cloudscape with atmospheric perspective (sprites from clouds.py, lit in 3-D):
+    rows near the horizon are small, flat, low-contrast and close to the sky colour; nearer rows sit a little
+    lower and are bigger, clearer and more contrasty; a couple of tall towers stand far away behind them.
+    The rows overlap into one band with an irregular top and bottom and open sky above it. A soft haze under
+    the band melts the lowest cloud bottoms. `scroll` is the camera offset in px (already scaled for distance)."""
+    from . import clouds
     rnd = random.Random(seed)
-    span = W + 2000
     hz = haze or tones[2]
-    rows = 5
-    plan = []
-    for r in range(rows):
-        q = r / (rows - 1)                                   # 0 = far/top .. 1 = near/bottom
-        yb = horizon - 110 + q * 330
-        w0, w1 = (340 + 360 * q), (620 + 520 * q)
-        tn = tuple(mix(c, hz, 0.55 * (1 - q) + 0.08) for c in tones) if haze else tones
-        par = 0.8 + 0.6 * q
-        sp = (0.5 - 0.12 * q) + 0.25 * (1 - min(1.0, density))
-        x = rnd.uniform(0, 400)
-        items = []
+    span = W + 2400
+    files = clouds._files()
+    pools = {k: [i for i, f in enumerate(files) if k in f] for k in ("flat", "cumulus", "tower")}
+    rows = (  # base y offset, width range, spacing, haze amount, sprite pool, vertical jitter, height stretch
+        (-20, (160, 300), 0.55, 0.72, "flat", 8, (0.8, 1.1)),
+        (20, (260, 460), 0.6, 0.55, "cumulus", 16, (0.75, 1.1)),
+        (70, (420, 700), 0.64, 0.35, "cumulus", 26, (0.8, 1.15)),
+        (150, (700, 1050), 0.8, 0.14, "cumulus", 55, (0.7, 1.05)),
+    )
+    heroes = [(rnd.uniform(0.12, 0.35), rnd.uniform(820, 950)), (rnd.uniform(0.6, 0.85), rnd.uniform(700, 820))]
+    for r, (dyb, (w0, w1), sp, hm, pool, jit, (s0, s1)) in enumerate(rows):
+        tn = tuple(mix(c, hz, hm) for c in tones)
+        par = 0.3 + 0.3 * r
+        order = pools[pool][:]
+        rnd.shuffle(order)
+        x, items = rnd.uniform(0, 300), []
         while x < span:
             wd = rnd.uniform(w0, w1) * scale
-            if rnd.random() > 0.18 * (1 - q):               # a few gaps in the far rows only
-                items.append((x, wd, rnd.uniform(-70, 70) * scale * (0.5 + q), rnd.uniform(0.0, 0.95 - 0.25 * q),
-                              len(items)))
-            x += wd * sp * rnd.uniform(0.7, 1.3)
-        off = scroll * par + T * speed * 4 * par
-        for x0, wd, dy, twk, k in sorted(items, key=lambda it: it[2]):
-            xx = (x0 - off) % span - 1000
+            if r < 3 or rnd.random() < 0.8:                  # the nearest row has a few gaps
+                items.append((x, wd, rnd.uniform(-1, 1) * jit * scale, order[len(items) % len(order)],
+                              rnd.uniform(s0, s1)))
+            x += wd * sp * min(1.6, 1 / max(0.4, density)) * rnd.uniform(0.75, 1.25)
+        if r == 1:                                           # far hero towers, behind the rows in front
+            items = [(fx * W + 1200, wd * scale, -10, rnd.choice(pools["tower"]), 1.0) for fx, wd in heroes] + items
+        off = scroll * par + T * speed * 3 * par
+        for x0, wd, dy, idx, st in items:
+            xx = (x0 - off) % span - 1200
             if -wd < xx < W + wd:
-                plan.append((xx, yb + dy, wd, tn, seed * 97 + r * 31 + k, (0.85 + 0.15 * q) * a, twk, 0.8 + 0.4 * q))
-
-    def paint(c):
-        for xx, yy, wd, tn, sd, al, twk, det in plan:
-            smokecloud.cloud(c, xx, yy, wd, tn, sd, T, a=al, tower=twk, churn=max(0.4, min(1.5, speed)), detail=det)
-
-    # all rows melt into one connected volume
-    smokecloud.merged(ctx, (-300, horizon - 900 * scale - 150, W + 300, horizon + 330 + 700 * scale), paint)
+                clouds.draw(ctx, xx, horizon + dyb * scale + dy, wd, tn, idx, a, stretch=st)
+    # haze under the band: the lowest bottoms dissolve instead of ending in a row of lumps
+    fl = mix(tones[1], hz, 0.75)
+    y0 = horizon + 120 * scale
+    g = cairo.LinearGradient(0, y0, 0, y0 + 260 * scale)
+    g.add_color_stop_rgba(0, *fl, 0.0)
+    g.add_color_stop_rgba(0.45, *fl, 0.55 * a)
+    g.add_color_stop_rgba(1, *fl, 0.3 * a)
+    ctx.rectangle(-400, y0, W + 800, 3000); ctx.set_source(g); ctx.fill()
 
 
 def sky_clouds(ctx, T, tones, seed=0, scroll=0.0, speed=1.0, density=1.0, haze=None, horizon=820, scale=1.0):
-    """Far cloudscape: high cirrus plus one continuous cumulus bank on the horizon (see cloud_deck)."""
-    cirrus(ctx, 60, 260, tones[2], seed + 1, t=T, a=0.25)
+    """Far cloudscape: high cirrus plus a cumulus band with atmospheric perspective (see cloud_deck)."""
+    cirrus(ctx, 60, 260, tones[2], seed + 1, t=T, a=0.2)
     cloud_deck(ctx, T, tones, seed + 3, horizon=horizon, scroll=scroll, speed=speed, haze=haze, density=density,
                scale=scale)

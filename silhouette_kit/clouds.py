@@ -298,13 +298,14 @@ def _surface(idx, tones):
     return surf
 
 
-def draw(ctx, x, base_y, width, tones, idx, a=1.0, flip=False):
-    """Draw sprite `idx`, centred on x, flat base on base_y, `width` px wide (content ~ 80% of the sprite)."""
+def draw(ctx, x, base_y, width, tones, idx, a=1.0, flip=False, stretch=1.0):
+    """Draw sprite `idx`, centred on x, base on base_y, `width` px wide (content ~ 80% of the sprite).
+    `stretch` scales the height (variety from a small library: < 1 flatter, > 1 taller)."""
     surf = _surface(idx, tones)
     s = width / (SW * 0.8)
     ctx.save()
     ctx.translate(x, base_y)
-    ctx.scale(-s if flip else s, s)
+    ctx.scale(-s if flip else s, s * stretch)
     ctx.translate(-SW / 2, -BASE)
     ctx.set_source_surface(surf, 0, 0)
     ctx.get_source().set_filter(cairo.FILTER_GOOD)
