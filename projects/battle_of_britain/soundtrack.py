@@ -6,7 +6,7 @@ import math, os, random, wave
 import numpy as np
 from silhouette_kit.sfx import (SR, ns, tvec, _norm, lp, hp, bp, env, pink, white, brown, smooth_noise, tone, damped,
                                 wind, birds, crickets, engine_drone, explosion, gunshot, machine_gun, flyby, whoosh,
-                                impact, footstep, flak_pop, Mix, reverb)
+                                impact, footstep, flak_pop, Mix, reverb, dive_scream, fire)
 
 D = os.path.dirname(os.path.abspath(__file__))
 
@@ -144,17 +144,28 @@ def build(out, TL, IMPACTS, beat, DROP, END, DUR):
             ev.add(whoosh(0.22, int(ti * 17), up=False, lo=500, hi=6000), ti - 0.05, gain=0.3)
     # near fly-bys (same schedule as shots.air_traffic near passes)
     near_shots = {6: 2, 10: 11, 11: 13}
+    PER, DUR_ = 1.1, 0.24                                   # must match shots.air_traffic
     for idx, seed in near_shots.items():
         t0, t1 = TL[idx][0], TL[idx][1]
-        k = math.floor((t0 + seed * 0.37) / 1.6)
+        k = math.floor((t0 + seed * 0.37) / PER)
         while True:
-            start = k * 1.6 - seed * 0.37
+            start = k * PER - seed * 0.37
             if start > t1:
                 break
-            if start + 0.32 > t0:
-                ev.add(flyby(1.3, int(start * 50), f0=random.Random(k).uniform(95, 125), pass_t=0.45),
-                       max(t0, start + 0.16) - 0.45, gain=0.55, pan=random.Random(k).choice((-0.6, 0.6)))
+            if start + DUR_ > t0:
+                ev.add(flyby(1.1, int(start * 50), f0=random.Random(k).uniform(95, 125), pass_t=0.4),
+                       max(t0, start + DUR_ / 2) - 0.4, gain=0.55, pan=random.Random(k).choice((-0.6, 0.6)))
             k += 1
+    # near clouds / smoke racing past (shots.speed_layer): a whoosh on each pass
+    import shots as S_
+    speed_shots = {4: (3, 0.9, 1.3, 2), 5: (17, 1.0, 1.4, 1), 6: (4, 1.0, 1.3, 2), 7: (5, 0.8, 1.3, 2),
+                   8: (7, 1.0, 1.3, 2), 9: (9, 0.8, 1.3, 1), 10: (11, 1.0, 1.2, 2), 11: (13, 1.0, 1.2, 2),
+                   12: (3, 0.9, 1.3, 2), 13: (15, 1.0, 1.2, 2)}
+    for idx, (seed, amt, rate, nl) in speed_shots.items():
+        t0, t1 = TL[idx][0], TL[idx][1]
+        for st, du, li in S_.speed_passes(t0, t1, seed, amt, rate, nl):
+            ev.add(whoosh(du + 0.25, int(st * 71), up=False, lo=250, hi=2500), st, gain=0.22,
+                   pan=0.5 if li == 0 else -0.5)
     # gunsight + wing guns + dogfight
     ev.add(machine_gun(0.35, 501, rate=18), beat(8) + 0.3, gain=0.5, pan=0.0)
     ev.add(machine_gun(beat(10) - beat(9), 502, rate=19), beat(9), gain=0.75, pan=-0.2)
@@ -180,6 +191,11 @@ def build(out, TL, IMPACTS, beat, DROP, END, DUR):
         ev.add(heartbeat(int(t * 10)), t, gain=0.5)
         t += 0.75 - 0.3 * (t - beat(22)) / (END - beat(22))
     ev.add(machine_gun(0.6, 710, rate=12, dist=0.9), beat(20), gain=0.2, pan=0.7)
+    fall_d = END - beat(19)
+    ev.add(dive_scream(fall_d, 713) * np.linspace(0.3, 1.0, ns(fall_d)), beat(19), gain=0.3)   # the dive screams
+    amb.add(fire(fall_d, 714, size=0.7), beat(19), gain=0.3)                                  # engine on fire
+    for tt in (beat(19) + 1.3, beat(24)):                                                      # through the cloud
+        ev.add(whoosh(0.9, int(tt * 7), up=False, lo=200, hi=4000), tt, gain=0.45)
     ev.add(bp(pink(0.9, 711), 400, 6000) * env(ns(0.9), 0.1, 0.3), beat(27) + 0.5, gain=0.5)     # through the oak
     ev.add(whoosh(END - beat(29), 712, up=True, lo=200, hi=7000), beat(29), gain=0.6)
 

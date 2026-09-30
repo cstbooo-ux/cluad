@@ -361,6 +361,24 @@ def air_traffic(ctx, T, seed=0, density=1.0, near=True, far=True, mid=True, y_ba
 SMOKE_TONES = ("#0c0404", "#1e0c0a", "#3a1a16", "#5a2c22")
 
 
+def speed_passes(t0, t1, seed, amount=1.0, rate=1.3, nlanes=2):
+    """(start, duration, lane) of every speed_layer pass overlapping [t0, t1] - the same schedule the picture uses,
+    so the soundtrack can put a whoosh on each one."""
+    out = []
+    per = 1.05 / rate
+    for li in range(nlanes):
+        sh = li * 0.47 + seed * 0.31
+        for kk in range(int(math.floor((t0 + sh) / per)) - 1, int(math.floor((t1 + sh) / per)) + 1):
+            r = random.Random(seed * 7919 + li * 131 + kk * 104729)
+            if r.random() > amount:
+                continue
+            dur = per * r.uniform(0.38, 0.5)
+            start = kk * per - sh
+            if start + dur > t0 and start < t1:
+                out.append((max(start, t0), dur, li))
+    return out
+
+
 def speed_layer(ctx, T, seed=0, amount=1.0, direction=-1, lanes=((170, 330), (1160, 1300)), rate=1.3):
     """Near clouds and drifting battle smoke racing past the camera: sells the speed of the fight.
     Each lane launches a pass every ~1 s; a pass is a big cloud sprite (sometimes a dark smoke clump) crossing
@@ -488,8 +506,11 @@ def shot_cockpit(ctx, u, T, jaw=1.0, look=0.0):
     speed_layer(ctx, T, seed=3, amount=0.9)
     shake = 3 * math.sin(T * 37)
     pilot_profile(ctx, 1000 + shake, 430, 400, nod=-0.05 + look, jaw=jaw, rim=RED_LIGHT, lens="#c85a3a")
-    # canopy frame + armoured headrest + mirror
-    c = "#0a0506"
+    cockpit_frame(ctx)
+
+
+def cockpit_frame(ctx, c="#0a0506"):
+    """Canopy frame + armoured headrest + mirror around the pilot close-up."""
     fill_poly(ctx, [(0, 0), (W, 0), (W, 90), (1500, 70), (400, 70), (0, 110)], c)          # canopy top rail
     line(ctx, [(1500, 70), (1780, 380), (1840, H)], c, 34)                                # windscreen frame
     fill_poly(ctx, [(1560, 40), (1700, 40), (1700, 110), (1560, 110)], c)                 # rear-view mirror
@@ -498,18 +519,83 @@ def shot_cockpit(ctx, u, T, jaw=1.0, look=0.0):
     line(ctx, [(420, 70), (380, 830)], c, 22)                                              # canopy hoop
 
 
+def _dial(ctx, x, y, r, T, i, kind="needle"):
+    """One cockpit instrument: bezel, dark face, pale tick marks, moving needle, a sliver of sky on the glass."""
+    circle(ctx, x, y, r * 1.12, "#2a1a14")
+    circle(ctx, x, y, r, "#0b0605")
+    for k in range(12):
+        a = k / 12 * TAU
+        line(ctx, [(x + math.cos(a) * r * 0.78, y + math.sin(a) * r * 0.78),
+                   (x + math.cos(a) * r * 0.92, y + math.sin(a) * r * 0.92)], "#d8c8a8", max(1.5, r * 0.04), 0.7)
+    if kind == "spin":                                       # altimeter unwinding
+        a = -T * (2.5 + i)
+    elif kind == "horizon":                                  # artificial horizon: tilted bar
+        a = 0.3 * math.sin(T * 1.7 + i)
+        line(ctx, [(x - math.cos(a) * r * 0.75, y - math.sin(a) * r * 0.75),
+                   (x + math.cos(a) * r * 0.75, y + math.sin(a) * r * 0.75)], "#e8a060", r * 0.07, 0.9)
+        a = None
+    else:
+        a = -2.2 + 0.9 * math.sin(T * (1 + i * 0.3) + i) + 0.08 * math.sin(T * 31 + i)
+    if a is not None:
+        line(ctx, [(x - math.cos(a) * r * 0.15, y - math.sin(a) * r * 0.15),
+                   (x + math.cos(a) * r * 0.75, y + math.sin(a) * r * 0.75)], "#f0e0c0", max(2, r * 0.06), 0.95)
+    circle(ctx, x, y, r * 0.08, "#2a1a14")
+    ctx.new_path(); ctx.arc(x, y, r * 0.82, -2.6, -1.4)          # reflection of the red sky on the glass
+    ctx.set_line_width(r * 0.1); src(ctx, "#ff7a50", 0.35); ctx.stroke()
+
+
 def shot_stick(ctx, u, T, squeeze=1.0):
-    """Gloved hand tightening on the spade grip."""
-    vgrad(ctx, 0, H, [(0, "#3a0c10"), (0.5, "#1a0808"), (1, "#070303")])
-    # instrument panel shapes (dials) in shadow at the top
-    for i, (x, y, r) in enumerate(((300, 120, 70), (480, 110, 60), (660, 125, 70), (1260, 120, 70), (1440, 115, 60),
-                                   (1620, 125, 65))):
-        circle(ctx, x, y, r, "#140606")
-        ctx.new_path(); ctx.arc(x, y, r * 0.8, 0, TAU); ctx.set_line_width(3); src(ctx, "#5a1e18", 0.8); ctx.stroke()
-        a = -2.2 + 0.6 * math.sin(T * (1 + i * 0.3) + i)
-        line(ctx, [(x, y), (x + math.cos(a) * r * 0.7, y + math.sin(a) * r * 0.7)], "#c86040", 3, 0.8)
-    glow(ctx, 960, 60, 700, "#ff5a30", 0.18)
-    spade_grip(ctx, 900 + 4 * math.sin(T * 29), 560, 230, squeeze=squeeze, button="#c8a050", rim=RED_LIGHT)
+    """Inside the cockpit, looking forward: the fight through the windscreen above, the instrument panel alive
+    with needles, the reflector sight glowing, and the gloved hand tightening on the spade grip."""
+    jit = 5 * math.sin(T * 37) + 3 * math.sin(T * 23 + 1)
+    ctx.save(); ctx.translate(0, jit * 0.5)
+    # the fight outside, through the windscreen
+    ws = [(250, -40), (1670, -40), (1560, 330), (360, 330)]
+    ctx.save(); poly(ctx, ws); ctx.clip()
+    battle_sky(ctx, T, tilt=0.14 + 0.05 * math.sin(T * 1.3), smoke=True, flak_n=6, seed=17, traffic=0.7, near=False)
+    ex = 1500 - u * 1100                                     # a 109 flashes across the windscreen
+    A.aircraft(ctx, "bf109", ex, 190 + 40 * u, 230, pitch=-0.12, flip=True, prop_t=T, light=RED_LIGHT, light_amt=0.45)
+    fx.tracers(ctx, T, 57, n=6, x0=960, y0=330, ang=-0.35, spread=30, speed=3200)
+    speed_layer(ctx, T, seed=17, amount=1.0, rate=1.4, lanes=((20, 120),))
+    ctx.restore()
+    # cockpit: dark sides, canopy frame, armoured glass edge
+    k = "#0a0506"
+    fill_poly(ctx, [(0, -60), (250, -60), (360, 330), (0, 330)], k)
+    fill_poly(ctx, [(W, -60), (1670, -60), (1560, 330), (W, 330)], k)
+    line(ctx, [(960, -60), (960, 10)], k, 40)
+    line(ctx, [(250, -40), (360, 330)], "#1a0e0c", 16); line(ctx, [(1670, -40), (1560, 330)], "#1a0e0c", 16)
+    # instrument panel with the coaming lit by the sky
+    fill_poly(ctx, [(0, 330), (W, 330), (W, H + 60), (0, H + 60)], "#140908")
+    g = cairo.LinearGradient(0, 330, 0, 620)                   # red sky light spilling onto the panel
+    g.add_color_stop_rgba(0, *hx("#6a2418"), 0.7); g.add_color_stop_rgba(1, *hx("#6a2418"), 0.0)
+    ctx.rectangle(0, 330, W, 290); ctx.set_source(g); ctx.fill()
+    fill_poly(ctx, [(0, 312), (W, 312), (W, 346), (0, 346)], "#1c0e0b")
+    line(ctx, [(0, 314), (W, 314)], "#ff7a50", 4, 0.55)
+    # reflector sight on the coaming, its glass throwing the reticle
+    fill_poly(ctx, [(900, 250), (1020, 250), (1030, 340), (890, 340)], "#0e0706")
+    fill_poly(ctx, [(905, 250), (1015, 250), (990, 150), (930, 150)], "#ff9060", 0.12)
+    ctx.new_path(); ctx.arc(960, 200, 34, 0, TAU); ctx.set_line_width(3); src(ctx, "#ffb060", 0.8); ctx.stroke()
+    circle(ctx, 960, 200, 4, "#ffb060", 0.9)
+    # blind-flying panel in the middle, more dials to the sides
+    dials = [(780, 440, 62, "needle"), (960, 440, 62, "horizon"), (1140, 440, 62, "needle"),
+             (780, 590, 62, "spin"), (960, 590, 62, "needle"), (1140, 590, 62, "needle"),
+             (430, 450, 48, "needle"), (560, 560, 44, "needle"), (1370, 450, 48, "needle"), (1500, 560, 44, "spin")]
+    rect(ctx, 690, 370, 540, 300, "#1c0f0c")
+    for n, (x, y, r, kind) in enumerate(dials):
+        _dial(ctx, x, y, r, T, n, kind)
+    for n in range(8):                                        # switches and a warning lamp
+        rect(ctx, 300 + n * 40, 680, 14, 30, "#241410")
+    flick = 0.5 + 0.5 * math.sin(T * 17)
+    circle(ctx, 1600, 680, 14, "#ff4020", 0.5 + 0.4 * flick)
+    glow(ctx, 1600, 680, 60, "#ff4020", 0.25 * flick)
+    # knees either side
+    fill_poly(ctx, [(0, 820), (380, 760), (560, 900), (520, H + 60), (0, H + 60)], "#0a0505")
+    fill_poly(ctx, [(W, 820), (1540, 760), (1360, 900), (1400, H + 60), (W, H + 60)], "#0a0505")
+    # tracer light flickering in through the glass
+    if (T * 3.1) % 1 < 0.25:
+        rect(ctx, 0, 0, W, H, "#ffb070", 0.06)
+    spade_grip(ctx, 960 + 5 * math.sin(T * 29), 740, 300, squeeze=squeeze, button="#c8a050", rim=RED_LIGHT)
+    ctx.restore()
 
 
 def shot_wing_bank(ctx, u, T, bank=0.5):
@@ -632,34 +718,142 @@ def shot_hit(ctx, u, T):
     speed_layer(ctx, T, seed=15, amount=1.0, rate=1.2)
 
 
-def shot_falling(ctx, u, T):
-    """Wing torn, engine smoking; the tilted fields rush up - the countryside from the opening returns."""
-    tilt = 0.35 + 0.1 * math.sin(T * 0.8)
-    redness = 1.0 - 0.4 * u
+FIELD_COLS = ("#a08e60", "#c4ae70", "#7d7a44", "#5f6a38", "#c9b98a", "#8a7446", "#4f5a30", "#b09a58")
+
+
+def ground_rush(ctx, T, alt, redness, horizon=200, speed=40.0, seed=0, wrecks=((6, 70), (-30, 140))):
+    """Kent seen from a falling aircraft, in real perspective: a patchwork of fields, hedgerows and trees on a
+    ground plane `alt` world units below the camera, streaming toward it at `speed` units/s. As alt drops the
+    fields swell and rush past - the ground coming up. wrecks: (x, distance) of burning wrecks on the ground."""
+    f = 1000.0
+    cx = W / 2
+    far_col = mix(KENT["far"], "#9a4a3a", redness)
+    rect(ctx, -W, horizon, W * 3, H * 3, far_col)
+    D, CW = 7.0, 10.0
+    trav = T * speed
+    zmin = f * alt / (H * 1.6 - horizon)
+    zmax = 420.0
+    n0, n1 = int(math.floor((trav + zmin) / D)), int(math.floor((trav + zmax) / D))
+    hedge = mix(KENT["hedge"], "#3a1414", redness)
+    trees = mix(mix(KENT["oak"], KENT["hedge"], 0.5), "#2a0c0a", redness * 0.6)
+    Y = lambda z: horizon + f * alt / z
+    for n in range(n1, n0 - 1, -1):                               # far to near
+        zf, zn = max(zmin, (n + 1) * D - trav), max(zmin * 0.5, n * D - trav)
+        if zf <= zn:
+            continue
+        yt, yb = Y(zf), Y(zn)
+        rr = random.Random(n * 7919 + seed)
+        off = rr.uniform(0, CW)
+        if yb - yt < 2.5:                                          # distant rows: one stripe
+            rect(ctx, -W, yt, W * 3, yb - yt + 1, mix(rr.choice(FIELD_COLS), far_col, 0.6))
+            continue
+        half = (W * 1.2) * zf / f
+        k0, k1 = int(math.floor((-half - off) / CW)) - 1, int(math.ceil((half - off) / CW)) + 1
+        for k in range(k0, k1 + 1):
+            X0, X1 = off + k * CW, off + (k + 1) * CW
+            rk = random.Random(n * 104729 + k * 7907 + seed)
+            col = mix(mix(rk.choice(FIELD_COLS), "#6a2820", redness * 0.55), far_col, max(0.0, min(0.5, zn / 300)))
+            fill_poly(ctx, [(cx + X0 * f / zf, yt), (cx + X1 * f / zf, yt), (cx + X1 * f / zn, yb),
+                            (cx + X0 * f / zn, yb)], col)
+            if rk.random() < 0.35:                                 # plough lines
+                for q in (0.33, 0.66):
+                    Xq = X0 + (X1 - X0) * q
+                    line(ctx, [(cx + Xq * f / zf, yt), (cx + Xq * f / zn, yb)], "#3e3824", max(1, 6 / zn * 10), 0.25)
+            line(ctx, [(cx + X0 * f / zf, yt), (cx + X0 * f / zn, yb)], hedge, max(1.0, 30 / zn), 0.9)
+            if rk.random() < 0.18:                                 # a tree on the hedge corner
+                circle(ctx, cx + X0 * f / zn, yb - 0.45 * f / zn, 0.55 * f / zn, trees, 0.9)
+        line(ctx, [(-W, yb), (W * 2, yb)], hedge, max(1.0, 40 / zn), 0.95)
+    for X, Zw in wrecks:                                           # burning wrecks on the ground
+        z = (Zw - trav) % 260 + max(zmin, 8)
+        if z < 30:                                                 # too close: it has passed under us
+            continue
+        sc = f / z
+        x, y = cx + X * sc, Y(z)
+        fx.smoke(ctx, x, y, 60 * sc, 5 * sc, "#2a1210", seed=int(X * 7) + 5, t=T, a=0.55, lean=0.35, rise=30)
+        fx.flames(ctx, x, y, 3 * sc, 3 * sc, T, seed=int(X) % 50)
+    g = cairo.LinearGradient(0, horizon, 0, horizon + 260)      # aerial haze at the horizon
+    hz = hx(mix("#e8c890", HAZE, redness))
+    g.add_color_stop_rgba(0, *hz, 0.85); g.add_color_stop_rgba(1, *hz, 0.0)
+    ctx.rectangle(-W, horizon, W * 3, 260); ctx.set_source(g); ctx.fill()
+
+
+def rushing_clouds(ctx, T, amount=1.0, tones=None, seed=0, up=1700.0, n=6):
+    """Cloud masses racing upward past the camera (we are falling through them)."""
+    if amount <= 0.01:
+        return
+    from silhouette_kit import clouds as CL
+    tones = tones or RED_TONES
+    for k in range(n):
+        r = random.Random(seed * 131 + k)
+        per = r.uniform(0.7, 1.1)
+        ph = (T / per + r.random()) % 1
+        wd = r.uniform(1100, 1900)
+        x = r.uniform(-200, W + 200)
+        y = H + wd * 0.6 - ph * (H + wd * 1.2) * (up / 1700)
+        CL.draw(ctx, x, y, wd, tones, CL.pick(r.randrange(10 ** 6), 0.5), 0.85 * amount, stretch=1.2)
+
+
+def falling_plane(ctx, T, x, y, size, pitch, roll_rate=5.0, redness=1.0, seed=95):
+    """Our Spitfire going down: tumbling bank, fire at the engine, long streaming smoke, debris flicking off."""
+    ex, ey = streaming(ctx, T, (x, y), pitch, 1300, nose=size * 0.42, size=size, life=1.5, a=0.9, seed=seed, fire=True)
+    A.aircraft(ctx, "spitfire", x, y, size, pitch=pitch, bank=0.45 * math.sin(T * roll_rate), prop_t=T * 0.3,
+               damage=1.0, light=RED_LIGHT, light_amt=0.4 * redness)
+    fx.flames(ctx, ex, ey + size * 0.03, size * 0.14, size * 0.18, T, seed=seed + 1)
+    rnd = random.Random(seed)
+    for k in range(7):                                             # bits of panel tumbling away
+        ph = (T * rnd.uniform(0.8, 1.4) + rnd.random()) % 1
+        bx = x - ph * rnd.uniform(300, 700) * math.cos(pitch)
+        by = y - ph * rnd.uniform(200, 500) + ph * ph * 120
+        ctx.save(); ctx.translate(bx, by); ctx.rotate(T * rnd.uniform(6, 14))
+        rect(ctx, -size * 0.02, -size * 0.008, size * 0.04, size * 0.016, "#1a1410", 1 - ph)
+        ctx.restore()
+
+
+def shot_spiral(ctx, u, T):
+    """Hit and going down: the Spitfire spins out of the fight and plunges into the cloud band below,
+    the clouds rushing UP past the camera, the world turning around it."""
+    spin = -0.25 - 1.3 * ease(u) - 0.1 * math.sin(T * 2)
     ctx.save()
-    ctx.translate(W / 2, H / 2); ctx.rotate(tilt); ctx.scale(1.45, 1.45); ctx.translate(-W / 2, -H / 2)
+    ctx.translate(W / 2, H / 2); ctx.rotate(spin); ctx.scale(1.6, 1.6); ctx.translate(-W / 2, -H / 2)
+    sky(ctx, 1.0)
+    sun(ctx, 1450, 700 - u * 900, 60, 1.0)
+    L.sky_clouds(ctx, T, RED_TONES, seed=31, speed=6, haze=HAZE, horizon=760 - u * 1100)
+    for i in range(4):                                             # the fight left behind, receding upward
+        A.aircraft(ctx, ("bf109", "spitfire")[i % 2], 300 + i * 420 + T * 60, 260 - u * 700 + i * 50, 120 - i * 10,
+                   pitch=0.1, flip=i % 2 == 0, prop_t=T, haze=HAZE, haze_amt=0.5, light=RED_LIGHT, light_amt=0.3)
+    rushing_clouds(ctx, T, amount=min(1.0, u * 2.5), seed=3)
+    ctx.restore()
+    falling_plane(ctx, T, 960 + 20 * math.sin(T * 3), 520, 420, -0.95 + 0.12 * math.sin(T * 2.3), roll_rate=6)
+    if u > 0.6:                                                    # into the cloud: everything whites out red
+        rect(ctx, 0, 0, W, H, mix("#d88a70", HAZE, 0.3), 0.85 * ease((u - 0.6) / 0.4))
+
+
+def shot_dive(ctx, u, T):
+    """Below the cloud: the Kent fields rush up at a steep angle; burning wrecks, a 109 gliding in, our plane
+    streaming fire straight down at them.  u 0 -> 1: from breaking out of the cloud to the last second."""
+    redness = 1.0 - 0.45 * u
+    tilt = 0.3 + 0.12 * math.sin(T * 0.9) + 0.25 * u
+    alt = 2.5 + 55 * (1 - u) ** 1.6
+    ctx.save()
+    ctx.translate(W / 2, H / 2); ctx.rotate(tilt); ctx.scale(1.5, 1.5); ctx.translate(-W / 2, -H / 2)
     sky(ctx, redness)
-    horizon = 520 - u * 380
-    L.rolling_field(ctx, horizon, 20, mix(KENT["far"], "#8a3a30", redness), seed=1, freq=0.5)
-    L.rolling_field(ctx, horizon + 80, 16, mix(KENT["fields"], "#6a2820", redness), seed=2, freq=0.8)
-    L.oast_house(ctx, 1300, horizon + 92, 70 + u * 60, mix(KENT["oast"], "#4a1c18", redness), cowl="#e8dcc6", t=T)
-    L.rolling_field(ctx, horizon + 150, 6, mix(KENT["hedge"], "#3a1414", redness), seed=3, freq=3.0)
-    L.rolling_field(ctx, horizon + 175, 8, mix(KENT["fields"], "#5a2420", redness), seed=13, freq=0.9)
-    L.rolling_field(ctx, horizon + 260, 12, mix("#6f6440", "#3a1614", redness), seed=4)
-    L.field_stripes(ctx, horizon + 260, H + 300, "#3e3824", a=0.3)
-    fx.smoke(ctx, 1650, horizon + 330, 320, 22, "#2a1210", seed=98, t=T, a=0.4, lean=0.3, rise=30)  # a wreck burning
-    fx.flames(ctx, 1650, horizon + 330, 30, 30, T, seed=99)
-    gx, gy = 1500 - u * 500, horizon + 120 + u * 80                                           # a 109 gliding in
+    ground_rush(ctx, T, alt, redness, horizon=150 - 60 * u, speed=30 + 90 * u, seed=4)
+    gx, gy = 1500 - u * 700, 330 + u * 120                                             # a 109 gliding in
     streaming(ctx, T, (gx, gy), -0.2, 260, nose=60, size=150, life=0.6, a=0.3, seed=92, flip=True)
     A.aircraft(ctx, "bf109", gx, gy, 150, pitch=-0.2, flip=True, prop_t=0, damage=0.6, light=RED_LIGHT,
                light_amt=0.3 * redness, haze=HAZE, haze_amt=0.25)
+    rushing_clouds(ctx, T, amount=max(0.0, 1 - u * 6), tones=L.tones_mix("gold", "red", redness), seed=5)
     ctx.restore()
-    ang = -0.5 - 0.1 * u + 0.05 * math.sin(T * 2.1)
-    x, y = 900 + 30 * math.sin(T * 3), 480 + 12 * math.sin(T * 1.7)
-    ex, ey = streaming(ctx, T, (x, y), ang, 1100, nose=380 * 0.42, size=380, life=1.3, a=0.85, seed=95, fire=True)
-    A.aircraft(ctx, "spitfire", x, y, 380, pitch=ang, bank=0.08 + 0.06 * math.sin(T * 5), prop_t=T * 0.4, damage=1.0,
-               light=RED_LIGHT, light_amt=0.35 * redness)
-    fx.flames(ctx, ex, ey + 12, 48, 64, T, seed=96)
+    if u < 0.15:                                                   # breaking out of the cloud bottom
+        rect(ctx, 0, 0, W, H, mix("#d88a70", HAZE, 0.3), 0.85 * (1 - u / 0.15))
+    falling_plane(ctx, T, 900 + 30 * math.sin(T * 3), 470 + 12 * math.sin(T * 1.7), 380 + 80 * u,
+                  -0.75 + 0.05 * math.sin(T * 2.1), roll_rate=4, redness=redness, seed=95)
+    for k in range(10):                                            # speed streaks
+        rr = random.Random(k * 17)
+        ph = (T * rr.uniform(1.5, 2.5) + rr.random()) % 1
+        x0 = rr.uniform(0, W)
+        y0 = H + 100 - ph * (H + 400)
+        line(ctx, [(x0, y0), (x0 - 40, y0 - 260)], "#ffe0c0", 2, 0.25 * (1 - ph))
 
 
 def shot_tree(ctx, u, T):
@@ -668,16 +862,38 @@ def shot_tree(ctx, u, T):
     kent_background(ctx, 900 + u * 900, T, redness=redness)
     px, py = 720 + u * 300, 250 + u * 90
     ex, ey = streaming(ctx, T, (px, py), -0.12, 1100, nose=360 * 0.42, size=360, life=1.3, a=0.85, seed=97, fire=True)
-    A.aircraft(ctx, "spitfire", px, py, 360, pitch=-0.12, prop_t=T * 0.3, damage=1.0,
+    A.aircraft(ctx, "spitfire", px, py, 360, pitch=-0.12, bank=0.2 * math.sin(T * 4), prop_t=T * 0.3, damage=1.0,
                light=RED_LIGHT, light_amt=0.25)
     fx.flames(ctx, ex, ey + 10, 44, 58, T, seed=98)
     L.oak_tree(ctx, 1500 - u * 1500, H + 150, 780, mix(KENT["oak"], "#140808", redness), seed=7, t=T, wind=3.0)
+    rnd = random.Random(7)
+    for k in range(40):                                            # leaves ripped off the oak by the slipstream
+        ph = (T * rnd.uniform(0.6, 1.2) + rnd.random()) % 1
+        lx = 1500 - u * 1500 + rnd.uniform(-300, 300) - ph * rnd.uniform(400, 900)
+        ly = H - 250 + rnd.uniform(-300, 200) - ph * rnd.uniform(100, 400) + ph * ph * 300
+        ellipse(ctx, lx, ly, 9, 4, KENT["oak"], 0.9 * (1 - ph), rot=T * rnd.uniform(5, 12))
 
 
 def shot_cockpit_fall(ctx, u, T):
-    """Inside, still hauling on the stick; the ground fills the canopy."""
-    shot_cockpit(ctx, u, T, jaw=1.0, look=0.08)
-    rect(ctx, 0, 0, W, H, "#3a1a0a", 0.15 + 0.2 * u)
+    """Inside, going down: the world spins outside the canopy, cloud then fields rushing UP past the glass,
+    smoke pouring by, fire light flickering on him, the airframe shaking; he fights the stick.
+    u: 0 = still high, in cloud .. 1 = the ground right there."""
+    spin = 0.9 + T * 1.1
+    alt = 3.0 + 60 * (1 - u) ** 1.5
+    ctx.save()
+    ctx.translate(W / 2, H / 2); ctx.rotate(spin); ctx.scale(1.7, 1.7); ctx.translate(-W / 2, -H / 2)
+    sky(ctx, 1.0 - 0.4 * u)
+    ground_rush(ctx, T, alt, 1.0 - 0.4 * u, horizon=260, speed=40 + 80 * u, seed=8)
+    rushing_clouds(ctx, T, amount=max(0.0, 1 - u * 1.6), seed=9, up=2600)
+    ctx.restore()
+    rushing_clouds(ctx, T + 0.3, amount=0.7, tones=SMOKE_TONES, seed=11, up=3000, n=3)       # smoke pouring past
+    flick = 0.6 + 0.4 * math.sin(T * 23) * math.sin(T * 7.3)
+    glow(ctx, 1750, 900, 900, "#ff7030", 0.35 * flick)                                         # engine fire light
+    sh = 9 * math.sin(T * 41) + 6 * math.sin(T * 27 + 1)
+    pilot_profile(ctx, 1000 + sh, 440 + sh * 0.5, 400, nod=-0.14 + 0.05 * math.sin(T * 9), jaw=1.0,
+                  rim=mix(RED_LIGHT, "#ffb060", flick * 0.5), rim_w=0.6, lens="#e87040")
+    cockpit_frame(ctx)
+    rect(ctx, 0, 0, W, H, "#ff6020", 0.05 + 0.05 * flick)
 
 
 def shot_ending_grass(ctx, u, T, pick=0.0):

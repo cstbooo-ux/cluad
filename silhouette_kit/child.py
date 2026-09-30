@@ -1,4 +1,4 @@
-"""A 1930s English country boy (flat cap, shirt, shorts, knee socks), side view facing right.
+"""A 1930s English country boy (leather flying helmet with goggles, shirt, shorts, knee socks), facing right.
 
 child(ctx, x, ground_y, height, phase, run=1.0, throw=None, c=...) -> dict(hand=(x, y), hand_ang=a, hip=(x, y))
   phase : 0..1 per stride (feet land at 0.0 and 0.5)
@@ -19,6 +19,12 @@ CHILD_HEAD = [(0.0, -0.5), (0.26, -0.44), (0.38, -0.28), (0.41, -0.1), (0.4, -0.
               (-0.47, 0.02), (-0.46, -0.2), (-0.34, -0.4), (-0.18, -0.48)]
 FLAT_CAP = [(-0.5, -0.12, C), (-0.44, -0.3), (-0.3, -0.5), (0.0, -0.6), (0.3, -0.56), (0.48, -0.44),
             (0.62, -0.3), (0.7, -0.26, C), (0.66, -0.2), (0.44, -0.2, C), (0.4, -0.2), (-0.1, -0.16), (-0.46, -0.08)]
+# the leather flying helmet (same shape as the pilot's in pilot.py) with the goggles pushed up on the forehead
+FLY_HELMET = [(0.38, -0.2), (0.36, -0.36), (0.25, -0.51), (0.0, -0.61), (-0.27, -0.56), (-0.48, -0.37),
+              (-0.55, -0.08), (-0.52, 0.2), (-0.41, 0.36, C), (-0.27, 0.38), (-0.13, 0.29), (0.0, 0.24), (0.05, 0.1),
+              (0.12, -0.06), (0.3, -0.13, C)]
+FLY_GOGGLES = [(0.14, -0.47, C), (0.3, -0.5), (0.44, -0.46), (0.5, -0.38), (0.47, -0.3), (0.36, -0.27),
+               (0.2, -0.3, C), (-0.3, -0.4, C), (-0.3, -0.48, C)]
 SHOE = [(-0.03, -0.022), (-0.04, 0.0), (-0.042, 0.028, C), (-0.04, 0.034, C), (0.07, 0.034), (0.095, 0.022),
         (0.09, 0.006), (0.05, -0.006), (0.02, -0.02)]
 # hands along the forearm direction: (s along, w across; + = thumb side), units of height
@@ -105,7 +111,8 @@ def _rgb(c):
     return tuple(int(c[i:i + 2], 16) / 255 for i in (0, 2, 4))
 
 
-def child(ctx, x, gy, h, phase, run=1.0, throw=None, c="#000000", reach=None, look_up=0.0, hold=False):
+def child(ctx, x, gy, h, phase, run=1.0, throw=None, c="#000000", reach=None, look_up=0.0, hold=False,
+          lens="#e8d8b0"):
     u = h
     shapes = []
     add = lambda pts: shapes.append(("p", pts))
@@ -167,7 +174,9 @@ def child(ctx, x, gy, h, phase, run=1.0, throw=None, c="#000000", reach=None, lo
     hp = lambda lst: Hf.pts([(p[0], -p[1]) + tuple(p[2:]) for p in lst])
     add([T(-0.03, 0.24), Hf(-0.3, -0.25), Hf(0.1, -0.42), Hf(0.15, -0.5), T(0.035, 0.25)])
     add(hp(CHILD_HEAD))
-    add(hp(FLAT_CAP))
+    add(hp(FLY_HELMET))                                         # his flying helmet - the pilot wears the same one
+    add(hp(FLY_GOGGLES))
+    glint = Hf(0.4, 0.385)                                      # (frame y is up)
     # arms
     shoulder = T(-0.005, 0.235)
     La, Lf = 0.14 * u, 0.13 * u
@@ -231,6 +240,10 @@ def child(ctx, x, gy, h, phase, run=1.0, throw=None, c="#000000", reach=None, lo
         else:
             ctx.new_sub_path(); ctx.arc(sh[1], sh[2], sh[3], 0, TAU)
         ctx.fill()
+    if lens:                                                    # sky caught in the goggle lens
+        ctx.save(); ctx.translate(*glint); ctx.rotate(nod)
+        ctx.scale(HH * 0.085, HH * 0.065); ctx.arc(0, 0, 1, 0, TAU); ctx.restore()
+        ctx.set_source_rgba(*(_rgb(lens) if isinstance(lens, str) else lens), 0.85); ctx.fill()
     ctx.restore()
     dy = gy - ground
     return {"hand": (hand[0], hand[1] + dy), "hand_ang": fore, "hip": (hip[0], hip[1] + dy)}

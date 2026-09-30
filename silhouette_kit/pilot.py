@@ -31,6 +31,8 @@ MAE_WEST = [(0.25, 0.95), (0.48, 1.02), (0.6, 1.2), (0.6, 1.45), (0.5, 1.62), (0
 
 
 def _rgb(c):
+    if not isinstance(c, str):
+        return tuple(c)[:3]
     c = c.lstrip("#")
     return tuple(int(c[i:i + 2], 16) / 255 for i in (0, 2, 4))
 

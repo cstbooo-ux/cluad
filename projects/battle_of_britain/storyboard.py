@@ -26,7 +26,7 @@ BOARD = [
     ("13 chase", "109 on the wingman's tail", lambda c: S.shot_chase(c, 0.5, 23.5)),
     ("14 attack", "side attack, 109 smoking", lambda c: S.shot_attack(c, 0.6, 25.0)),
     ("15 hit", "our Spitfire is hit", lambda c: S.shot_hit(c, 0.3, 27.0)),
-    ("16 falling", "falling, fields rush up", lambda c: S.shot_falling(c, 0.6, 29.5)),
+    ("16 falling", "falling, fields rush up", lambda c: S.shot_dive(c, 0.4, 29.5)),
     ("17 tree", "skimming the great oak", lambda c: S.shot_tree(c, 0.4, 32.5)),
     ("18 cockpit_fall", "still hauling the stick", lambda c: S.shot_cockpit_fall(c, 0.7, 33.5)),
     ("19 ending", "34.85s  1930: plane in the grass", lambda c: S.shot_ending_grass(c, 0.3, 36.0, pick=0.2)),
