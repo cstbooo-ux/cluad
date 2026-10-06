@@ -1,0 +1,15 @@
+{
+  "name": "zhouzong_trailer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "《周总，夫人她真的不爱你了》2D 动态漫预告：代码绘制画面 + 合成配音/配乐",
+  "scripts": {
+    "render": "NODE_PATH=$(npm root -g) node render.js zhouzong_trailer.mp4"
+  },
+  "dependencies": {
+    "@fontsource/ma-shan-zheng": "^5.3.1",
+    "@fontsource/noto-sans-sc": "^5.3.0",
+    "@fontsource/noto-serif-sc": "^5.3.0",
+    "@fontsource/zcool-kuaile": "^5.3.0"
+  }
+}

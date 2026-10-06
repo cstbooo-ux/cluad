@@ -1,0 +1,218 @@
+{
+  "title": "周总，夫人她真的不爱你了 · 预告",
+  "W": 720, "H": 1280, "fps": 24,
+  "voices": {
+    "smx":     {"name": "史明轩", "speed": 1.0,  "pitch": 1.0,  "formant": 1.0,  "gain": 1.0},
+    "zy":      {"name": "周禹",   "speed": 1.05, "pitch": 0.64, "formant": 0.88, "gain": 1.15},
+    "ji":      {"name": "季博达", "speed": 0.95, "pitch": 0.72, "formant": 0.92, "gain": 1.1},
+    "grandpa": {"name": "季老爷子", "speed": 1.2, "pitch": 0.6,  "formant": 0.84, "gain": 1.1},
+    "dnz":     {"name": "妲纽至", "speed": 0.95, "pitch": 0.74, "formant": 0.9,  "gain": 1.1},
+    "nar":     {"name": "旁白",   "speed": 1.15, "pitch": 0.9,  "formant": 1.0,  "gain": 0.95, "reverb": true},
+    "host":    {"name": "主持人", "speed": 0.95, "pitch": 1.12, "formant": 1.04, "gain": 0.95},
+    "crowd":   {"name": "宾客",   "speed": 0.9,  "pitch": 1.06, "formant": 1.02, "gain": 0.7, "whisper": true}
+  },
+  "shots": [
+    {"id": "cold_open", "min": 3.8, "mus": "none", "rain": true,
+     "ev": {"thunder": 1.5},
+     "sfx": [["thunder", "thunder"]],
+     "lines": []},
+
+    {"id": "study_wide", "pre": 0.5, "post": 0.7, "mus": "sad", "rain": true,
+     "lines": [
+       {"who": "nar", "text": "结婚三年，史明轩第一次走进周禹的书房，", "b": [360, 170]},
+       {"who": "nar", "text": "是为了离婚。", "gap": 0.35, "b": [360, 170]}
+     ],
+     "ev": {"flash": "L1_start-0.15"},
+     "sfx": [["thunder_soft", "flash"]]},
+
+    {"id": "agreement", "pre": 1.0, "post": 0.6, "mus": "sad", "rain": true,
+     "lines": [
+       {"who": "smx", "text": "签字吧。", "b": [470, 300, 560, 40], "st": "off"}
+     ],
+     "sfx": [["paper", 0.15]]},
+
+    {"id": "split", "pre": 0.5, "post": 0.6, "mus": "sad", "rain": true,
+     "lines": [
+       {"who": "zy",  "text": "又闹什么？", "b": [530, 120, 420, 250]},
+       {"who": "smx", "text": "没闹。", "gap": 0.6, "b": [190, 760, 330, 880]},
+       {"who": "smx", "text": "周禹，我不要你了。", "gap": 0.45, "b": [200, 760, 330, 880]}
+     ]},
+
+    {"id": "zy_close", "pre": 0.7, "post": 0.5, "mus": "sad", "rain": true,
+     "lines": [
+       {"who": "zy", "text": "离开周家，你什么都没有。", "b": [360, 150, 380, 300]}
+     ],
+     "sfx": [["low_hit", 0.05]]},
+
+    {"id": "smx_close", "pre": 0.5, "post": 0.9, "mus": "sad", "rain": true,
+     "lines": [
+       {"who": "smx", "text": "你有没有想过，", "b": [360, 1090, 380, 880]},
+       {"who": "smx", "text": "我是真的不喜欢你了？", "gap": 0.35, "b": [360, 1090, 380, 880]}
+     ],
+     "ev": {"tear": "L1_start+0.3"}},
+
+    {"id": "sign", "pre": 1.3, "post": 0.4, "mus": "sad", "rain": true,
+     "ev": {"sign": 0.25},
+     "sfx": [["swish", 0.3]],
+     "lines": [
+       {"who": "zy",  "text": "别后悔。", "b": [250, 250, 160, 30], "st": "off"},
+       {"who": "smx", "text": "放心。这次不会了。", "gap": 0.4, "b": [430, 1060, 560, 1270], "st": "off"}
+     ]},
+
+    {"id": "door", "pre": 1.3, "post": 1.8, "mus": "sad", "rain": true,
+     "lines": [
+       {"who": "zy",  "text": "外面下雨。", "b": [230, 1060, 90, 1270], "st": "off"},
+       {"who": "smx", "text": "没关系。", "gap": 0.9, "b": [470, 260, 420, 470]},
+       {"who": "smx", "text": "淋不死。", "gap": 0.35, "b": [470, 260, 420, 470]}
+     ],
+     "ev": {"stop": "L0_start", "door": "L2_end+0.55", "black": "L2_end+1.0"},
+     "sfx": [["heels", 0.0], ["door", "door"], ["thunder", "door+0.25"]]},
+
+    {"id": "after", "pre": 0.3, "post": 0.8, "mus": "sad_thin",
+     "lines": [
+       {"who": "nar", "text": "三天后，", "b": [360, 420], "st": "card"},
+       {"who": "nar", "text": "七天后，", "gap": 0.2, "b": [360, 420], "st": "card"},
+       {"who": "nar", "text": "半个月后。", "gap": 0.2, "b": [360, 420], "st": "card"},
+       {"who": "zy",  "text": "……不识好歹。", "at": "msg+1.1", "b": [470, 1110, 540, 1270], "st": "off"}
+     ],
+     "ev": {"phone": "L2_end+0.3", "call1": "phone+0.35", "call2": "phone+1.05", "hang": "phone+1.75", "msg": "phone+2.6"},
+     "sfx": [["tick", 0.05], ["tick", "L1_start"], ["tick", "L2_start"], ["ring", "call1"], ["ring", "call2"], ["hangup", "hang"], ["ding", "msg"]]},
+
+    {"id": "gossip", "pre": 1.4, "post": 0.7, "mus": "glam_low",
+     "lines": [
+       {"who": "crowd", "text": "一个破产千金，哪里配得上周总。", "b": [360, 330, 300, 470], "st": "whisper"},
+       {"who": "zy", "text": "闭嘴。", "gap": 0.35, "b": [230, 820, 380, 900], "st": "cold"}
+     ],
+     "ev": {"w1": 0.1, "w2": 0.5, "w3": 0.9, "hush": "L1_start"},
+     "sfx": [["murmur", 0.0, "hush"], ["freeze", "hush"]]},
+
+    {"id": "entrance", "pre": 1.3, "post": 1.7, "mus": "glam",
+     "lines": [
+       {"who": "nar", "text": "就在这时，史明轩来了。", "b": [360, 160]}
+     ],
+     "ev": {"open": 0.2, "inset": "L0_end+0.15"},
+     "sfx": [["doors", "open"], ["gasp", "open+0.3"], ["flashcam", 1.1], ["flashcam", 1.5], ["flashcam", 2.1], ["sparkle", "open+0.6"], ["low_hit", "inset"]]},
+
+    {"id": "reveal", "pre": 0.5, "post": 2.2, "mus": "glam",
+     "lines": [
+       {"who": "grandpa", "text": "她就是我季家的外孙女——", "b": [250, 300, 210, 560]},
+       {"who": "grandpa", "text": "史明轩。", "gap": 0.5, "b": [220, 230, 40, 60], "st": "off"}
+     ],
+     "ev": {"cut": "L1_start", "hit": "L1_end+0.15"},
+     "sfx": [["boom", "hit"], ["gasp", "hit+0.1"], ["sparkle", "cut"]]},
+
+    {"id": "wall", "pre": 0.6, "post": 0.6, "mus": "glam_low",
+     "lines": [
+       {"who": "zy",  "text": "离婚才半个月，你就找到下家了？", "b": [470, 190, 520, 360]},
+       {"who": "smx", "text": "怎么，前夫哥吃醋啊？", "gap": 0.5, "b": [250, 1090, 240, 880]}
+     ],
+     "ev": {"slam": 0.15},
+     "sfx": [["slam", "slam"]]},
+
+    {"id": "uncle", "pre": 0.4, "post": 1.0, "mus": "comic",
+     "lines": [
+       {"who": "ji",  "text": "哦，对了。", "b": [520, 110, 430, 260]},
+       {"who": "ji",  "text": "按辈分，她叫我小舅。", "gap": 0.3, "b": [500, 110, 430, 260]},
+       {"who": "nar", "text": "周禹人生第一次觉得，自己像个傻子。", "at": "blank+0.7", "b": [360, 1190]}
+     ],
+     "ev": {"blank": "L1_end+0.35"},
+     "sfx": [["boing", "blank"], ["crow", "blank+0.35"]]},
+
+    {"id": "fire", "pre": 0.7, "post": 1.2, "mus": "danger",
+     "lines": [
+       {"who": "host", "text": "着火了！", "b": [360, 260], "st": "shout"},
+       {"who": "zy",   "text": "明轩！", "at": "fall+0.15", "b": [500, 640, 540, 540], "st": "shout"}
+     ],
+     "ev": {"dark": 0.2, "fire": 0.55, "fall": "L0_end+1.4", "hit": "fall+0.95", "white": "fall+1.0"},
+     "mus_gain": [["hit-0.03", 1.0], ["hit", 0.0]],
+     "sfx": [["power_down", "dark"], ["fire", "fire", "hit"], ["crack", "fall-0.2"], ["boom", "hit"], ["ring_ear", "hit+0.1"]]},
+
+    {"id": "hospital", "pre": 0.9, "post": 0.6, "mus": "soft",
+     "lines": [
+       {"who": "smx", "text": "我会还这个人情。", "b": [380, 170, 380, 360]},
+       {"who": "smx", "text": "但感动不是爱情。", "gap": 0.45, "b": [380, 170, 380, 360]}
+     ],
+     "sfx": [["monitor", 0.1]]},
+
+    {"id": "corridor", "pre": 0.8, "post": 1.0, "mus": "soft",
+     "lines": [
+       {"who": "zy", "text": "以前她等了我五年。", "b": [400, 180, 400, 360]},
+       {"who": "zy", "text": "我也该等等她。", "gap": 0.6, "b": [400, 180, 400, 360]}
+     ]},
+
+    {"id": "paris", "pre": 2.0, "post": 1.0, "mus": "romance",
+     "lines": [
+       {"who": "host", "text": "所以，您有喜欢的人了？", "b": [250, 250, 40, 160], "st": "off"},
+       {"who": "smx",  "text": "有一个。", "gap": 0.4, "b": [500, 330, 430, 500]},
+       {"who": "smx",  "text": "一个追了我一年，还没追到的人。", "gap": 1.4, "b": [400, 300, 400, 500]}
+     ],
+     "ev": {"inset": "L1_end+0.1", "inset_out": "L2_start-0.05"},
+     "sfx": [["applause", 0.7], ["low_hit", "inset"], ["ooh", "L2_end+0.1"]]},
+
+    {"id": "jet", "pre": 0.4, "post": 0.4, "mus": "romance",
+     "lines": [
+       {"who": "zy",  "text": "订机票。", "b": [530, 140, 420, 280], "st": "shout"},
+       {"who": "dnz", "text": "可巴黎那边现在是凌晨——", "gap": 0.3, "b": [430, 760, 250, 900]},
+       {"who": "zy",  "text": "私人飞机。", "gap": 0.2, "b": [530, 140, 420, 280]},
+       {"who": "dnz", "text": "……有钱真好。", "at": "jet+0.6", "b": [360, 1000], "st": "think"}
+     ],
+     "ev": {"stand": 0.15, "jet": "L2_end+0.45"},
+     "sfx": [["whoosh", "stand"], ["jet", "jet"]],
+     "min_after": {"ev": "jet", "dur": 3.0}},
+
+    {"id": "hotel", "pre": 1.6, "post": 0.6, "mus": "romance",
+     "lines": [
+       {"who": "zy",  "text": "你直播里说的人……是我吗？", "b": [480, 180, 500, 340]},
+       {"who": "smx", "text": "不是。", "gap": 0.6, "b": [190, 560, 210, 680]},
+       {"who": "zy",  "text": "……知道了。", "gap": 0.9, "b": [480, 180, 500, 340]},
+       {"who": "smx", "text": "站住。", "gap": 0.9, "b": [190, 560, 210, 680]},
+       {"who": "smx", "text": "周禹，你现在怎么这么好骗？", "gap": 0.5, "b": [195, 560, 210, 680]}
+     ],
+     "ev": {"dim": "L1_end+0.1", "turn": "L2_end+0.2", "back": "L3_start"},
+     "mus_gain": [["L1_start", 1.0], ["L1_start+0.2", 0.0], ["L3_end+0.2", 0.0], ["L4_start", 0.8]],
+     "sfx": [["elevator", 0.05], ["heartbeat", "L1_end+0.1"]]},
+
+    {"id": "ring", "pre": 1.4, "post": 0.8, "mus": "romance",
+     "lines": [
+       {"who": "zy",  "text": "什么时候转正？", "b": [500, 640, 450, 780]},
+       {"who": "smx", "text": "看表现。三年起步。", "gap": 0.4, "b": [250, 120, 120, 0], "st": "off"},
+       {"who": "zy",  "text": "不长。等得起。", "gap": 0.5, "b": [500, 640, 450, 780]}
+     ],
+     "ev": {"catch": 0.6, "open": 0.9},
+     "sfx": [["toss", 0.05], ["catch", "catch"], ["box", "open"], ["sparkle", "open+0.1"]]},
+
+    {"id": "callback", "pre": 0.9, "post": 1.3, "mus": "romance",
+     "lines": [
+       {"who": "zy",  "text": "下雨。", "b": [520, 760, 450, 880]},
+       {"who": "smx", "text": "淋不死。", "gap": 0.4, "b": [300, 210, 360, 360], "st": "off"},
+       {"who": "zy",  "text": "好。那我在这等。", "gap": 1.5, "b": [520, 760, 450, 880]},
+       {"who": "smx", "text": "隔壁。", "gap": 1.1, "b": [300, 210, 360, 360], "st": "off"}
+     ],
+     "ev": {"shut": 0.15, "memory": "L1_end+0.1", "memory_out": "L2_start-0.2", "crack": "L3_start-0.35", "card": "L3_end+0.1"},
+     "mus_gain": [["memory", 1.0], ["memory+0.3", 0.25], ["memory_out", 0.25], ["memory_out+0.4", 1.0]],
+     "sfx": [["door", "shut"], ["rain_memory", "memory", "memory_out"], ["click", "crack"], ["toss", "card"], ["catch", "card+0.45"]]},
+
+    {"id": "title", "pre": 0.8, "post": 2.4, "mus": "romance_end",
+     "lines": [
+       {"who": "nar", "text": "周总，夫人她真的不爱你了。", "b": [360, 1140], "st": "none"}
+     ],
+     "sfx": [["swell", 0.0], ["sparkle", 0.6]]},
+
+    {"id": "cream", "pre": 1.0, "post": 0.4, "mus": "comic2",
+     "lines": [
+       {"who": "smx", "text": "我新买的八千块面霜呢？", "b": [470, 110, 420, 260]},
+       {"who": "zy",  "text": "我用了。", "gap": 0.35, "b": [240, 720, 330, 860]},
+       {"who": "zy",  "text": "以为是身体乳。", "gap": 0.25, "b": [240, 720, 330, 860]},
+       {"who": "smx", "text": "周禹——！", "gap": 0.35, "b": [240, 720], "st": "roar"}
+     ],
+     "ev": {"roar": "L3_start"},
+     "mus_gain": [["L3_start-0.05", 1.0], ["L3_start", 0.0]],
+     "sfx": [["pop", 0.3], ["scratch", "roar"], ["boom", "roar+0.02"]]},
+
+    {"id": "chat", "pre": 0.3, "post": 0.4, "mus": "comic2",
+     "lines": [],
+     "ev": {"m1": 0.5, "m2": 1.7, "m3": 2.9, "m4": 3.7, "face": 4.8, "end": 6.4},
+     "min": 8.6,
+     "sfx": [["ding", "m1"], ["ding", "m2"], ["ding", "m3"], ["ding", "m4"], ["crow", "face+0.2"], ["sparkle", "end"]]}
+  ]
+}

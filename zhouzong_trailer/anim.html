@@ -1,0 +1,23 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>周总，夫人她真的不爱你了 · 预告</title>
+<link rel="stylesheet" href="node_modules/@fontsource/noto-sans-sc/500.css">
+<link rel="stylesheet" href="node_modules/@fontsource/noto-sans-sc/700.css">
+<link rel="stylesheet" href="node_modules/@fontsource/noto-serif-sc/600.css">
+<link rel="stylesheet" href="node_modules/@fontsource/noto-serif-sc/900.css">
+<link rel="stylesheet" href="node_modules/@fontsource/zcool-kuaile/400.css">
+<link rel="stylesheet" href="node_modules/@fontsource/ma-shan-zheng/400.css">
+<style>html,body{margin:0;background:#000}canvas{display:block;margin:0 auto;max-height:100vh}</style>
+</head><body>
+<canvas id="c" width="720" height="1280"></canvas>
+<script src="lib.js"></script>
+<script src="engine.js"></script>
+<script src="scenes.js"></script>
+<script>
+// open anim.html?play in a browser (via a local http server) for a realtime preview with sound
+if (location.search.includes('play')) window.ready.then(() => {
+  const a = new Audio('build/mix.wav'); let t0 = null;
+  document.body.onclick = () => { a.play(); t0 = performance.now(); };
+  (function loop() { renderFrame(t0 === null ? 0 : a.currentTime); requestAnimationFrame(loop); })();
+});
+</script>
+</body></html>
