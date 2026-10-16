@@ -1,0 +1,15 @@
+{
+  "name": "linalg_ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "线性代数与 AI 科普短片：3Blue1Brown 风格，代码绘制画面 + 合成配乐",
+  "scripts": {
+    "tex": "node tex.js",
+    "render": "NODE_PATH=$(npm root -g) node render.js linalg_ai.mp4"
+  },
+  "dependencies": {
+    "@fontsource/noto-sans-sc": "^5.3.1",
+    "@fontsource/noto-serif-sc": "^5.3.1",
+    "mathjax-full": "3.2.2"
+  }
+}
